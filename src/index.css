@@ -2,95 +2,113 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Professional Engineering Theme - Dark Technical */
+    --background: 222 47% 6%;
+    --foreground: 210 40% 96%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 222 47% 8%;
+    --card-foreground: 210 40% 96%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 222 47% 8%;
+    --popover-foreground: 210 40% 96%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Technical Blue - Primary */
+    --primary: 199 89% 48%;
+    --primary-foreground: 222 47% 6%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Steel Gray - Secondary */
+    --secondary: 215 20% 18%;
+    --secondary-foreground: 210 40% 90%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Muted Technical */
+    --muted: 215 20% 14%;
+    --muted-foreground: 215 20% 55%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Accent Cyan */
+    --accent: 187 92% 45%;
+    --accent-foreground: 222 47% 6%;
 
-    --destructive: 0 84.2% 60.2%;
+    /* Warning/Alert States */
+    --destructive: 0 72% 51%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Success State */
+    --success: 142 71% 45%;
+    --success-foreground: 222 47% 6%;
+
+    /* Warning State */
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 6%;
+
+    --border: 215 20% 20%;
+    --input: 215 20% 16%;
+    --ring: 199 89% 48%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
+    /* Engineering specific tokens */
+    --grid-line: 215 20% 15%;
+    --data-highlight: 199 89% 48%;
+    --calculation-bg: 222 47% 10%;
+    --pipe-color: 199 89% 60%;
+    --node-color: 187 92% 45%;
+    --flow-indicator: 142 71% 45%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 222 47% 7%;
+    --sidebar-foreground: 210 40% 90%;
+    --sidebar-primary: 199 89% 48%;
+    --sidebar-primary-foreground: 222 47% 6%;
+    --sidebar-accent: 215 20% 14%;
+    --sidebar-accent-foreground: 210 40% 90%;
+    --sidebar-border: 215 20% 18%;
+    --sidebar-ring: 199 89% 48%;
   }
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+  .light {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 199 89% 40%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 215 20% 94%;
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 215 20% 96%;
+    --muted-foreground: 215 20% 40%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 187 92% 35%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --success: 142 71% 35%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 45%;
+    --warning-foreground: 222 47% 11%;
+
+    --border: 215 20% 88%;
+    --input: 215 20% 92%;
+    --ring: 199 89% 40%;
+
+    --grid-line: 215 20% 92%;
+    --data-highlight: 199 89% 40%;
+    --calculation-bg: 215 20% 97%;
+    --pipe-color: 199 89% 50%;
+    --node-color: 187 92% 40%;
+    --flow-indicator: 142 71% 40%;
   }
 }
 
@@ -100,6 +118,122 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  /* Technical/Engineering typography */
+  .font-mono-tech {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .font-display {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  /* Engineering grid background */
+  .engineering-grid {
+    background-image: 
+      linear-gradient(hsl(var(--grid-line)) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--grid-line)) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* Data cell styling */
+  .data-cell {
+    @apply font-mono-tech text-sm px-3 py-2 bg-muted/50 rounded border border-border;
+  }
+
+  /* Calculation result highlight */
+  .result-highlight {
+    @apply font-mono-tech font-semibold text-primary bg-primary/10 px-2 py-1 rounded;
+  }
+
+  /* Status indicators */
+  .status-ok {
+    @apply text-success bg-success/10 border-success/30;
+  }
+
+  .status-warning {
+    @apply text-warning bg-warning/10 border-warning/30;
+  }
+
+  .status-error {
+    @apply text-destructive bg-destructive/10 border-destructive/30;
+  }
+
+  /* Technical card */
+  .tech-card {
+    @apply bg-card border border-border rounded-lg shadow-lg shadow-black/20;
+  }
+
+  /* Pipe visualization */
+  .pipe-line {
+    stroke: hsl(var(--pipe-color));
+    stroke-width: 3;
+    fill: none;
+  }
+
+  .node-point {
+    fill: hsl(var(--node-color));
+  }
+
+  /* Animated flow */
+  @keyframes flow-animation {
+    0% { stroke-dashoffset: 20; }
+    100% { stroke-dashoffset: 0; }
+  }
+
+  .flow-animated {
+    stroke-dasharray: 10 5;
+    animation: flow-animation 1s linear infinite;
+  }
+
+  /* Glow effects */
+  .glow-primary {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.3);
+  }
+
+  .glow-accent {
+    box-shadow: 0 0 20px hsl(var(--accent) / 0.3);
+  }
+
+  /* Header gradient */
+  .header-gradient {
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.1) 0%, hsl(var(--accent) / 0.05) 100%);
+  }
+
+  /* Section divider */
+  .section-divider {
+    @apply h-px bg-gradient-to-r from-transparent via-border to-transparent;
+  }
+}
+
+@layer utilities {
+  /* Scrollbar styling */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted));
+    border-radius: 3px;
+  }
+
+  /* Fade edges */
+  .fade-edges {
+    mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
   }
 }
