@@ -6,12 +6,13 @@
  * - Cálculo hidráulico completo
  * - Salvar/Carregar rede em JSON
  * - Exportar relatório
+ * - Integração com Wizard de Projeto
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Calculator, RotateCcw, Download, Upload, Save, FileText } from 'lucide-react';
+import { Calculator, RotateCcw, Download, Upload, Save, FileText, Building2 } from 'lucide-react';
 import { NetworkEditor } from './NetworkEditor';
 import { BuildingConfig } from './BuildingConfig';
 import { ResultsPanel } from './ResultsPanel';
@@ -21,6 +22,16 @@ import type { Node, Pipe, SystemResult } from '@/models/types';
 import { mm_to_m, m_to_mm } from '@/core/units';
 import { getHazenWilliamsC, getEquivalentLength, ACCESSORY_TYPES } from '@/core/equivalentLength';
 import { generateWordReport } from '@/utils/wordExport';
+import { useProject, extractHydraulicConfig } from '@/contexts/ProjectContext';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 
 // Dados de exemplo para demonstração
 const DEMO_NODES: Node[] = [
@@ -83,9 +94,41 @@ export function HydraulicCalculator() {
   
   const [result, setResult] = useState<SystemResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
+  const [showProjectDialog, setShowProjectDialog] = useState(false);
   const { toast } = useToast();
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Project integration
+  const { projectData, clearProjectData } = useProject();
+  
+  // Show dialog when project data is available on mount
+  useEffect(() => {
+    if (projectData) {
+      setShowProjectDialog(true);
+    }
+  }, []);
+  
+  // Import project data into calculator
+  const handleImportProject = useCallback(() => {
+    if (!projectData) return;
+    
+    const config = extractHydraulicConfig(projectData);
+    setOccupancyCode(config.occupancyCode);
+    setFireLoadMJm2(config.fireLoadMJm2);
+    setTotalAreaM2(config.totalAreaM2);
+    setBuildingHeight(config.buildingHeight);
+    setShowProjectDialog(false);
+    
+    toast({
+      title: 'Projeto importado',
+      description: `Dados de "${projectData.projectName}" aplicados ao calculador.`,
+    });
+  }, [projectData, toast]);
+  
+  const handleDismissProject = () => {
+    setShowProjectDialog(false);
+  };
 
   const handleCalculate = useCallback(() => {
     if (nodes.length < 2) {
@@ -358,6 +401,39 @@ export function HydraulicCalculator() {
 
   return (
     <div className="min-h-screen bg-background engineering-grid">
+      {/* Project Import Dialog */}
+      <Dialog open={showProjectDialog} onOpenChange={setShowProjectDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary" />
+              Projeto Cadastrado Encontrado
+            </DialogTitle>
+            <DialogDescription>
+              Há um projeto PSCIP cadastrado. Deseja importar os dados para o calculador hidráulico?
+            </DialogDescription>
+          </DialogHeader>
+          {projectData && (
+            <div className="space-y-2 py-4 border-y">
+              <p className="font-medium">{projectData.projectName}</p>
+              <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+                <Badge variant="outline">Área: {projectData.totalArea?.toLocaleString('pt-BR')} m²</Badge>
+                <Badge variant="outline">Altura: {projectData.totalHeight} m</Badge>
+                <Badge variant="outline">{projectData.sectors?.length || 0} setores</Badge>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={handleDismissProject}>
+              Ignorar
+            </Button>
+            <Button onClick={handleImportProject}>
+              Importar Dados
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
       {/* Hidden file input for loading JSON */}
       <input
         type="file"
@@ -375,6 +451,11 @@ export function HydraulicCalculator() {
               <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
                 <span className="text-primary">⚡</span>
                 HydraFlow Pro
+                {projectData && (
+                  <Badge variant="secondary" className="text-xs">
+                    {projectData.projectName}
+                  </Badge>
+                )}
                 <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
                   NTCB 19/2020
                 </span>
@@ -384,6 +465,16 @@ export function HydraulicCalculator() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {projectData && (
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={() => setShowProjectDialog(true)}
+                >
+                  <Building2 className="h-4 w-4 mr-2" />
+                  Importar Projeto
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={handleReset}>
                 <RotateCcw className="h-4 w-4 mr-2" />
                 Resetar
