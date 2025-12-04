@@ -144,6 +144,59 @@ export type Database = {
           },
         ]
       }
+      state_regulations: {
+        Row: {
+          category: string | null
+          code: string
+          content_text: string | null
+          created_at: string | null
+          description: string | null
+          effective_date: string | null
+          file_url: string | null
+          id: string
+          state_code: string
+          title: string
+          updated_at: string | null
+          version: string | null
+        }
+        Insert: {
+          category?: string | null
+          code: string
+          content_text?: string | null
+          created_at?: string | null
+          description?: string | null
+          effective_date?: string | null
+          file_url?: string | null
+          id?: string
+          state_code: string
+          title: string
+          updated_at?: string | null
+          version?: string | null
+        }
+        Update: {
+          category?: string | null
+          code?: string
+          content_text?: string | null
+          created_at?: string | null
+          description?: string | null
+          effective_date?: string | null
+          file_url?: string | null
+          id?: string
+          state_code?: string
+          title?: string
+          updated_at?: string | null
+          version?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "state_regulations_state_code_fkey"
+            columns: ["state_code"]
+            isOneToOne: false
+            referencedRelation: "available_states"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string

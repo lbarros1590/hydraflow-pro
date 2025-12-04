@@ -15,6 +15,7 @@ import ProjectWizard from "./pages/ProjectWizard";
 import ProjectDetail from "./pages/ProjectDetail";
 import HydraulicPage from "./pages/HydraulicPage";
 import StandaloneCalculator from "./pages/StandaloneCalculator";
+import SprinklerCalculator from "./pages/SprinklerCalculator";
 import DocsPage from "./pages/DocsPage";
 import AssistantPage from "./pages/AssistantPage";
 import NotFound from "./pages/NotFound";
@@ -50,6 +51,7 @@ const App = () => (
               <Route path="projects/:id/edit" element={<ProjectWizard />} />
               <Route path="projects/:id/hydraulic" element={<HydraulicPage />} />
               <Route path="calculator" element={<StandaloneCalculator />} />
+              <Route path="calculator/sprinkler" element={<SprinklerCalculator />} />
               <Route path="docs" element={<DocsPage />} />
               <Route path="assistant" element={<AssistantPage />} />
             </Route>
