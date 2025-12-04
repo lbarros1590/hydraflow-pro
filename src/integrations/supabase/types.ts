@@ -37,25 +37,43 @@ export type Database = {
       }
       hydraulic_calculations: {
         Row: {
+          accessories: Json | null
+          connections: Json | null
           created_at: string | null
           id: string
+          is_active: boolean | null
+          name: string | null
           network_data: Json | null
           project_id: string
+          report_data: Json | null
           results: Json | null
+          version: number | null
         }
         Insert: {
+          accessories?: Json | null
+          connections?: Json | null
           created_at?: string | null
           id?: string
+          is_active?: boolean | null
+          name?: string | null
           network_data?: Json | null
           project_id: string
+          report_data?: Json | null
           results?: Json | null
+          version?: number | null
         }
         Update: {
+          accessories?: Json | null
+          connections?: Json | null
           created_at?: string | null
           id?: string
+          is_active?: boolean | null
+          name?: string | null
           network_data?: Json | null
           project_id?: string
+          report_data?: Json | null
           results?: Json | null
+          version?: number | null
         }
         Relationships: [
           {
@@ -102,6 +120,163 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      project_files: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          file_category: string
+          file_name: string
+          file_size: number | null
+          file_type: string
+          file_url: string
+          id: string
+          metadata: Json | null
+          project_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          file_category?: string
+          file_name: string
+          file_size?: number | null
+          file_type: string
+          file_url: string
+          id?: string
+          metadata?: Json | null
+          project_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          file_category?: string
+          file_name?: string
+          file_size?: number | null
+          file_type?: string
+          file_url?: string
+          id?: string
+          metadata?: Json | null
+          project_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_reviews: {
+        Row: {
+          comment: string
+          created_at: string | null
+          file_id: string | null
+          id: string
+          page_number: number | null
+          position_x: number | null
+          position_y: number | null
+          priority: string | null
+          project_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          reviewer_id: string
+          status: string | null
+        }
+        Insert: {
+          comment: string
+          created_at?: string | null
+          file_id?: string | null
+          id?: string
+          page_number?: number | null
+          position_x?: number | null
+          position_y?: number | null
+          priority?: string | null
+          project_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          reviewer_id: string
+          status?: string | null
+        }
+        Update: {
+          comment?: string
+          created_at?: string | null
+          file_id?: string | null
+          id?: string
+          page_number?: number | null
+          position_x?: number | null
+          position_y?: number | null
+          priority?: string | null
+          project_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          reviewer_id?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_reviews_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "project_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_reviews_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_shares: {
+        Row: {
+          accepted_at: string | null
+          created_at: string | null
+          id: string
+          owner_id: string
+          permission: string | null
+          project_id: string
+          shared_with_email: string
+          shared_with_user_id: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string | null
+          id?: string
+          owner_id: string
+          permission?: string | null
+          project_id: string
+          shared_with_email: string
+          shared_with_user_id?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string | null
+          id?: string
+          owner_id?: string
+          permission?: string | null
+          project_id?: string
+          shared_with_email?: string
+          shared_with_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_shares_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       projects: {
         Row: {
