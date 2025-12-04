@@ -5,11 +5,17 @@
  * - Pressão de partida (fonte/bomba)
  * - Perda de carga nos trechos
  * - Diferença de cotas (elevação)
+ * 
+ * CORREÇÕES NTCB 19/2020:
+ * - Validação usa pressão no ESGUICHO (nozzlePressure), não válvula
+ * - Perda em mangueira calculada por Hazen-Williams consistente
+ * - Seleção de mais desfavoráveis baseada em nozzlePressure
  */
 
 import type { NetworkGraph, FlowResult, PressureResult, Node } from '../models/types';
 import { calculateHeadLoss, calculateVelocity } from './hazen';
 import { findSourceNode, findPath } from './graph';
+import { Lmin_to_m3s, mm_to_m } from './units';
 
 /**
  * Calcula as pressões em todos os nós da rede
@@ -37,7 +43,8 @@ export function calculatePressures(
     staticPressure: sourcePressure,
     dynamicPressure: sourcePressure,
     elevation: sourceNode.elevation,
-    residualPressure: sourcePressure
+    residualPressure: sourcePressure,
+    headLossFromSource: 0
   });
 
   // BFS para calcular pressões em todos os nós
@@ -48,6 +55,7 @@ export function calculatePressures(
   while (queue.length > 0) {
     const currentId = queue.shift()!;
     const currentPressure = pressures.get(currentId)!;
+    const currentNode = graph.nodeMap.get(currentId)!;
 
     const neighbors = graph.adjacency.get(currentId) || [];
     
@@ -70,16 +78,20 @@ export function calculatePressures(
         headLoss = calculateHeadLoss(Q, pipe.diameter, pipe.roughness, totalLength);
       }
 
-      // Diferença de cota
-      const currentNode = graph.nodeMap.get(currentId)!;
+      // Diferença de cota (dZ = elevação_destino - elevação_origem)
+      // Se dZ > 0, estamos subindo, logo a pressão diminui
       const elevationDiff = targetNodeData.elevation - currentNode.elevation;
 
       // Pressão no nó de destino
       // P_destino = P_origem - perda - diferença_cota
+      // CORREÇÃO: sinal correto para elevação
       const dynamicPressure = currentPressure.dynamicPressure - headLoss - elevationDiff;
 
       // Pressão estática (sem considerar perda dinâmica)
       const staticPressure = currentPressure.staticPressure - elevationDiff;
+
+      // Perda acumulada desde a fonte
+      const headLossFromSource = (currentPressure.headLossFromSource || 0) + headLoss;
 
       pressures.set(targetNode, {
         nodeId: targetNode,
@@ -87,7 +99,7 @@ export function calculatePressures(
         dynamicPressure,
         elevation: targetNodeData.elevation,
         residualPressure: dynamicPressure,
-        headLossFromSource: (currentPressure.headLossFromSource || 0) + headLoss
+        headLossFromSource
       });
 
       visited.add(targetNode);
@@ -139,7 +151,7 @@ export function calculatePipeDetails(
       headLossUnit = headLossTotal / totalLength;
     }
 
-    // Pressões
+    // Pressões (usar as calculadas, não recalcular)
     const startPressure = pressures.get(pipe.startNodeId)?.dynamicPressure || 0;
     const endPressure = pressures.get(pipe.endNodeId)?.dynamicPressure || 0;
 
@@ -158,88 +170,161 @@ export function calculatePipeDetails(
 }
 
 /**
- * Calcula a pressão no esguicho/bocal do hidrante
- * Considera perda adicional na mangueira e no esguicho
+ * Calcula a perda de carga na mangueira usando Hazen-Williams
  * 
- * @param hydrantPressure - Pressão no hidrante (mca)
+ * CORREÇÃO: Usa a mesma fórmula HW consistente com o resto do sistema
+ * J = 10.643 × Q^1.852 × C^(-1.852) × D^(-4.87)
+ * 
  * @param flowLmin - Vazão em L/min
  * @param hoseLength - Comprimento da mangueira (m)
  * @param hoseDiameter - Diâmetro da mangueira (mm)
- * @param nozzleK - Coeficiente K do esguicho
+ * @param hazenC - Coeficiente C (default 120 para mangueira)
+ * @returns Perda de carga em mca
+ */
+export function calculateHoseLoss(
+  flowLmin: number,
+  hoseLength: number,
+  hoseDiameter: number,
+  hazenC: number = 120
+): number {
+  if (flowLmin <= 0 || hoseLength <= 0 || hoseDiameter <= 0) {
+    return 0;
+  }
+
+  // Converte para SI
+  const Q_m3s = Lmin_to_m3s(flowLmin);
+  const D_m = mm_to_m(hoseDiameter);
+
+  // Hazen-Williams: J = 10.643 × Q^1.852 × C^(-1.852) × D^(-4.87)
+  const J = 10.643 * 
+    Math.pow(Q_m3s, 1.852) * 
+    Math.pow(hazenC, -1.852) * 
+    Math.pow(D_m, -4.87);
+
+  // Perda total = J × L
+  return J * hoseLength;
+}
+
+/**
+ * Calcula a pressão no esguicho/bocal do hidrante
+ * 
+ * CORREÇÃO: Usa calculateHoseLoss com Hazen-Williams consistente
+ * 
+ * @param hydrantPressure - Pressão na válvula do hidrante (mca)
+ * @param flowLmin - Vazão em L/min
+ * @param hoseLength - Comprimento da mangueira (m)
+ * @param hoseDiameter - Diâmetro da mangueira (mm)
  * @returns Pressão no esguicho (mca)
  */
 export function calculateNozzlePressure(
   hydrantPressure: number,
   flowLmin: number,
   hoseLength: number = 30,
-  hoseDiameter: number = 40,
-  nozzleK: number = 0.00015
+  hoseDiameter: number = 40
 ): number {
-  // Perda na mangueira (usando fórmula simplificada)
-  // J = 0.001745 × Q^1.85 × D^-4.87 para mangueira
-  const Qm3s = flowLmin / 60000;
-  const Dm = hoseDiameter / 1000;
-  
-  // Coeficiente aproximado para mangueira de incêndio
-  const hoseLoss = 0.001745 * Math.pow(Qm3s, 1.85) * Math.pow(Dm, -4.87) * hoseLength;
+  // Perda na mangueira usando Hazen-Williams
+  const hoseLoss = calculateHoseLoss(flowLmin, hoseLength, hoseDiameter, 120);
 
-  // Perda no esguicho: H = K × Q²
-  // K em (mca)/(L/min)²
-  const nozzleLoss = nozzleK * Math.pow(flowLmin, 2);
-
-  return hydrantPressure - hoseLoss - nozzleLoss;
+  // Pressão no esguicho = pressão válvula - perda mangueira
+  return hydrantPressure - hoseLoss;
 }
 
 /**
- * Encontra os dois hidrantes mais desfavoráveis
- * (menores pressões residuais)
+ * Encontra os hidrantes ordenados por pressão no esguicho (mais desfavoráveis primeiro)
+ * 
+ * CORREÇÃO: Usa nozzlePressure para ordenação, não valvePressure
  * 
  * @param graph - Grafo da rede
  * @param pressures - Mapa de pressões
- * @returns Array com os 2 hidrantes mais desfavoráveis
+ * @param flowLmin - Vazão por hidrante (L/min)
+ * @param hoseLength - Comprimento da mangueira (m)
+ * @param hoseDiameter - Diâmetro da mangueira (mm)
+ * @returns Array de hidrantes ordenados por nozzlePressure
  */
 export function findMostUnfavorableHydrants(
   graph: NetworkGraph,
-  pressures: Map<string, PressureResult>
-): Array<{ nodeId: string; pressure: number }> {
-  const hydrantPressures: Array<{ nodeId: string; pressure: number }> = [];
+  pressures: Map<string, PressureResult>,
+  flowLmin: number = 100,
+  hoseLength: number = 30,
+  hoseDiameter: number = 40
+): Array<{ nodeId: string; valvePressure: number; nozzlePressure: number; hoseLoss: number }> {
+  const hydrantPressures: Array<{ 
+    nodeId: string; 
+    valvePressure: number; 
+    nozzlePressure: number;
+    hoseLoss: number;
+  }> = [];
 
   for (const [nodeId, node] of graph.nodeMap) {
     if (node.type === 'hydrant') {
-      const pressure = pressures.get(nodeId)?.dynamicPressure || 0;
-      hydrantPressures.push({ nodeId, pressure });
+      const valvePressure = pressures.get(nodeId)?.dynamicPressure || 0;
+      const hoseLoss = calculateHoseLoss(flowLmin, hoseLength, hoseDiameter, 120);
+      const nozzlePressure = valvePressure - hoseLoss;
+      
+      hydrantPressures.push({ 
+        nodeId, 
+        valvePressure,
+        nozzlePressure,
+        hoseLoss
+      });
     }
   }
 
-  // Ordena por pressão (menor primeiro)
-  hydrantPressures.sort((a, b) => a.pressure - b.pressure);
+  // CORREÇÃO: Ordena por pressão no ESGUICHO (menor = mais desfavorável)
+  hydrantPressures.sort((a, b) => a.nozzlePressure - b.nozzlePressure);
 
-  // Retorna os 2 com menor pressão
-  return hydrantPressures.slice(0, 2);
+  return hydrantPressures;
 }
 
 /**
- * Verifica se todas as pressões atendem ao mínimo requerido
+ * Verifica se todas as pressões NO ESGUICHO atendem ao mínimo requerido
  * 
+ * CORREÇÃO CRÍTICA: Valida nozzlePressure, não valvePressure
+ * 
+ * @param graph - Grafo da rede
  * @param pressures - Mapa de pressões
- * @param minPressure - Pressão mínima requerida (mca)
+ * @param minNozzlePressure - Pressão mínima requerida no esguicho (mca)
+ * @param flowLmin - Vazão por hidrante (L/min)
+ * @param hoseLength - Comprimento mangueira (m)
+ * @param hoseDiameter - Diâmetro mangueira (mm)
  * @returns Resultado da verificação
  */
 export function checkMinimumPressures(
   graph: NetworkGraph,
   pressures: Map<string, PressureResult>,
-  minPressure: number
-): { ok: boolean; violations: Array<{ nodeId: string; pressure: number; deficit: number }> } {
-  const violations: Array<{ nodeId: string; pressure: number; deficit: number }> = [];
+  minNozzlePressure: number,
+  flowLmin: number = 100,
+  hoseLength: number = 30,
+  hoseDiameter: number = 40
+): { 
+  ok: boolean; 
+  violations: Array<{ 
+    nodeId: string; 
+    valvePressure: number; 
+    nozzlePressure: number; 
+    deficit: number 
+  }> 
+} {
+  const violations: Array<{ 
+    nodeId: string; 
+    valvePressure: number;
+    nozzlePressure: number; 
+    deficit: number 
+  }> = [];
 
   for (const [nodeId, node] of graph.nodeMap) {
     if (node.type === 'hydrant') {
-      const pressure = pressures.get(nodeId)?.dynamicPressure || 0;
-      if (pressure < minPressure) {
+      const valvePressure = pressures.get(nodeId)?.dynamicPressure || 0;
+      const hoseLoss = calculateHoseLoss(flowLmin, hoseLength, hoseDiameter, 120);
+      const nozzlePressure = valvePressure - hoseLoss;
+      
+      // CORREÇÃO: Verifica pressão no ESGUICHO, não na válvula
+      if (nozzlePressure < minNozzlePressure) {
         violations.push({
           nodeId,
-          pressure,
-          deficit: minPressure - pressure
+          valvePressure,
+          nozzlePressure,
+          deficit: minNozzlePressure - nozzlePressure
         });
       }
     }

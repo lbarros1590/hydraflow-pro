@@ -1,19 +1,24 @@
 /**
  * Calculadora Hidráulica Principal - NTCB 19/2020
  * Corpo de Bombeiros Militar do Estado de Mato Grosso
+ * 
+ * FUNCIONALIDADES:
+ * - Cálculo hidráulico completo
+ * - Salvar/Carregar rede em JSON
+ * - Exportar relatório
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Calculator, RotateCcw, Download } from 'lucide-react';
+import { Calculator, RotateCcw, Download, Upload, Save } from 'lucide-react';
 import { NetworkEditor } from './NetworkEditor';
 import { BuildingConfig } from './BuildingConfig';
 import { ResultsPanel } from './ResultsPanel';
 import { NetworkVisualization } from './NetworkVisualization';
 import { calculateSystem } from '@/engine/calculateSystem';
 import type { Node, Pipe, SystemResult } from '@/models/types';
-import { mm_to_m } from '@/core/units';
+import { mm_to_m, m_to_mm } from '@/core/units';
 import { getHazenWilliamsC } from '@/core/equivalentLength';
 
 // Dados de exemplo para demonstração
@@ -34,6 +39,36 @@ const DEMO_PIPES: Pipe[] = [
   { id: 'P5', name: 'Trecho 5', startNodeId: 'N2', endNodeId: 'N6', length: 25, diameter: mm_to_m(50), roughness: getHazenWilliamsC('PVC'), material: 'PVC', accessories: [], equivalentLength: 0 },
 ];
 
+// Interface para salvar/carregar JSON
+interface NetworkData {
+  version: string;
+  projectName: string;
+  createdAt: string;
+  config: {
+    occupancyCode: string;
+    fireLoadMJm2: number;
+    totalAreaM2: number;
+    buildingHeight: number;
+    pumpEfficiency: number;
+  };
+  nodes: Array<{
+    id: string;
+    type: string;
+    name: string;
+    elevation: number;
+  }>;
+  pipes: Array<{
+    id: string;
+    name: string;
+    startNodeId: string;
+    endNodeId: string;
+    length: number;
+    diameterMm: number;
+    material: string;
+    accessories: Array<{ type: string; quantity: number }>;
+  }>;
+}
+
 export function HydraulicCalculator() {
   const [nodes, setNodes] = useState<Node[]>(DEMO_NODES);
   const [pipes, setPipes] = useState<Pipe[]>(DEMO_PIPES);
@@ -48,6 +83,8 @@ export function HydraulicCalculator() {
   const [result, setResult] = useState<SystemResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const { toast } = useToast();
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleCalculate = useCallback(() => {
     if (nodes.length < 2) {
@@ -146,7 +183,128 @@ export function HydraulicCalculator() {
     setResult(null);
   };
 
-  const handleExport = () => {
+  // Salvar rede em JSON
+  const handleSaveNetwork = () => {
+    const networkData: NetworkData = {
+      version: '1.0',
+      projectName: 'HydraFlow Pro Network',
+      createdAt: new Date().toISOString(),
+      config: {
+        occupancyCode,
+        fireLoadMJm2,
+        totalAreaM2,
+        buildingHeight,
+        pumpEfficiency
+      },
+      nodes: nodes.map(n => ({
+        id: n.id,
+        type: n.type,
+        name: n.name,
+        elevation: n.elevation
+      })),
+      pipes: pipes.map(p => ({
+        id: p.id,
+        name: p.name,
+        startNodeId: p.startNodeId,
+        endNodeId: p.endNodeId,
+        length: p.length,
+        diameterMm: m_to_mm(p.diameter),
+        material: p.material || 'PVC',
+        accessories: p.accessories || []
+      }))
+    };
+
+    const blob = new Blob([JSON.stringify(networkData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `hydraflow_network_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: 'Rede salva',
+      description: 'Arquivo JSON exportado com sucesso.',
+    });
+  };
+
+  // Carregar rede de JSON
+  const handleLoadNetwork = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data: NetworkData = JSON.parse(e.target?.result as string);
+        
+        // Validação básica
+        if (!data.nodes || !data.pipes) {
+          throw new Error('Arquivo JSON inválido: faltam nodes ou pipes');
+        }
+
+        // Converte nodes
+        const loadedNodes: Node[] = data.nodes.map(n => ({
+          id: n.id,
+          type: n.type as Node['type'],
+          name: n.name,
+          elevation: n.elevation
+        }));
+
+        // Converte pipes
+        const loadedPipes: Pipe[] = data.pipes.map(p => ({
+          id: p.id,
+          name: p.name,
+          startNodeId: p.startNodeId,
+          endNodeId: p.endNodeId,
+          length: p.length,
+          diameter: mm_to_m(p.diameterMm),
+          roughness: getHazenWilliamsC(p.material || 'PVC'),
+          material: p.material || 'PVC',
+          accessories: (p.accessories || []).map(a => ({
+            type: a.type as any,
+            quantity: a.quantity,
+            equivalentLengthUnit: 0,
+            equivalentLengthTotal: 0
+          })),
+          equivalentLength: 0
+        }));
+
+        // Carrega configurações se existirem
+        if (data.config) {
+          setOccupancyCode(data.config.occupancyCode || 'A-2');
+          setFireLoadMJm2(data.config.fireLoadMJm2 || 300);
+          setTotalAreaM2(data.config.totalAreaM2 || 1500);
+          setBuildingHeight(data.config.buildingHeight || 15);
+          setPumpEfficiency(data.config.pumpEfficiency || 0.65);
+        }
+
+        setNodes(loadedNodes);
+        setPipes(loadedPipes);
+        setResult(null);
+
+        toast({
+          title: 'Rede carregada',
+          description: `${loadedNodes.length} nós e ${loadedPipes.length} trechos importados.`,
+        });
+      } catch (error) {
+        console.error('Load error:', error);
+        toast({
+          title: 'Erro ao carregar',
+          description: error instanceof Error ? error.message : 'Arquivo JSON inválido',
+          variant: 'destructive'
+        });
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset input para permitir carregar mesmo arquivo novamente
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleExportReport = () => {
     if (!result) return;
 
     const report = generateTextReport(result, nodes, pipes);
@@ -166,6 +324,15 @@ export function HydraulicCalculator() {
 
   return (
     <div className="min-h-screen bg-background engineering-grid">
+      {/* Hidden file input for loading JSON */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleLoadNetwork}
+        accept=".json"
+        className="hidden"
+      />
+      
       {/* Header */}
       <header className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
@@ -182,7 +349,7 @@ export function HydraulicCalculator() {
                 Sistema Hidráulico para Dimensionamento de Hidrantes - CBMMT (Mato Grosso)
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={handleReset}>
                 <RotateCcw className="h-4 w-4 mr-2" />
                 Resetar
@@ -190,11 +357,23 @@ export function HydraulicCalculator() {
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={handleExport}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Importar
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleSaveNetwork}>
+                <Save className="h-4 w-4 mr-2" />
+                Salvar
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleExportReport}
                 disabled={!result}
               >
                 <Download className="h-4 w-4 mr-2" />
-                Exportar
+                Relatório
               </Button>
               <Button onClick={handleCalculate} disabled={isCalculating}>
                 <Calculator className="h-4 w-4 mr-2" />
@@ -281,6 +460,7 @@ function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]):
   lines.push(`Hidrantes Simultâneos: ${result.config.demandConfig.simultaneousHydrants}`);
   lines.push(`Pressão Mín. Esguicho: ${result.config.demandConfig.minNozzlePressure} mca`);
   lines.push(`Mangueira Máx.: ${result.config.demandConfig.hoseLength} m`);
+  lines.push(`Diâmetro Mangueira: ${result.config.demandConfig.hoseDiameter} mm`);
   lines.push('');
   
   // Bomba
@@ -305,12 +485,15 @@ function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]):
   lines.push('-'.repeat(50));
   lines.push('Hidrantes Ativos (mais desfavoráveis):');
   for (const h of result.hydrants.mostUnfavorable) {
-    lines.push(`  ${h.id}: P.válvula=${h.pressure.toFixed(2)} mca | P.esguicho=${h.nozzlePressure.toFixed(2)} mca`);
+    const node = nodes.find(n => n.id === h.id);
+    const status = h.nozzlePressure >= result.config.demandConfig.minNozzlePressure ? 'OK' : 'FALHA';
+    lines.push(`  ${node?.name || h.id}: P.válvula=${h.pressure.toFixed(2)} mca | P.esguicho=${h.nozzlePressure.toFixed(2)} mca [${status}]`);
   }
   if (result.hydrants.mostFavorable) {
     lines.push('');
     lines.push('Hidrante Mais Favorável:');
-    lines.push(`  ${result.hydrants.mostFavorable.id}: P.válvula=${result.hydrants.mostFavorable.pressure.toFixed(2)} mca | P.esguicho=${result.hydrants.mostFavorable.nozzlePressure.toFixed(2)} mca`);
+    const node = nodes.find(n => n.id === result.hydrants.mostFavorable!.id);
+    lines.push(`  ${node?.name || result.hydrants.mostFavorable.id}: P.válvula=${result.hydrants.mostFavorable.pressure.toFixed(2)} mca | P.esguicho=${result.hydrants.mostFavorable.nozzlePressure.toFixed(2)} mca`);
   }
   lines.push('');
   
@@ -319,8 +502,10 @@ function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]):
   lines.push('-'.repeat(50));
   lines.push('Trecho  | Q(L/min) | V(m/s) | J(m/m)  | Leq(m) | ΔH(mca) | Pi(mca) | Pf(mca)');
   for (const pipe of result.hydraulics.pipeDetails) {
+    const pipeData = pipes.find(p => p.id === pipe.pipeId);
+    const pipeName = pipeData?.name || pipe.pipeId;
     lines.push(
-      `${pipe.pipeId.padEnd(7)} | ${pipe.flowLmin.toFixed(1).padStart(8)} | ${pipe.velocity.toFixed(2).padStart(6)} | ${pipe.headLossUnit.toFixed(4).padStart(7)} | ${(pipe.equivalentLength || 0).toFixed(1).padStart(6)} | ${pipe.headLossTotal.toFixed(2).padStart(7)} | ${pipe.startPressure.toFixed(2).padStart(7)} | ${pipe.endPressure.toFixed(2).padStart(7)}`
+      `${pipeName.padEnd(7)} | ${pipe.flowLmin.toFixed(1).padStart(8)} | ${pipe.velocity.toFixed(2).padStart(6)} | ${pipe.headLossUnit.toFixed(4).padStart(7)} | ${(pipe.equivalentLength || 0).toFixed(1).padStart(6)} | ${pipe.headLossTotal.toFixed(2).padStart(7)} | ${pipe.startPressure.toFixed(2).padStart(7)} | ${pipe.endPressure.toFixed(2).padStart(7)}`
     );
   }
   lines.push('');
@@ -328,7 +513,7 @@ function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]):
   // Status
   lines.push('6. VERIFICAÇÕES');
   lines.push('-'.repeat(50));
-  lines.push(`Pressões mínimas: ${result.checks.minPressureOk ? 'OK' : 'FALHA'}`);
+  lines.push(`Pressões mínimas (esguicho ≥ ${result.config.demandConfig.minNozzlePressure} mca): ${result.checks.minPressureOk ? 'OK' : 'FALHA'}`);
   lines.push(`Velocidades: ${result.checks.velocitiesOk ? 'OK' : 'VERIFICAR'}`);
   lines.push(`Balanço de massa: ${result.checks.massBalanceOk ? 'OK' : 'VERIFICAR'}`);
   

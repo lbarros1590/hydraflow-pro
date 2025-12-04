@@ -2,7 +2,11 @@
  * Engine Principal - Pipeline Completo de Cálculo
  * NTCB 19/2020 - Corpo de Bombeiros Militar do Estado de Mato Grosso
  * 
- * Coordena todos os módulos para executar o cálculo completo do sistema hidráulico.
+ * CORREÇÕES APLICADAS:
+ * - Validação usa nozzlePressure (pressão no esguicho), não valvePressure
+ * - Perda em mangueira calculada por Hazen-Williams consistente
+ * - Seleção de mais/menos favoráveis baseada em nozzlePressure
+ * - Verificação correta de pressões mínimas
  */
 
 import type { 
@@ -20,6 +24,7 @@ import {
   calculatePipeDetails, 
   findMostUnfavorableHydrants,
   calculateNozzlePressure,
+  calculateHoseLoss,
   checkMinimumPressures 
 } from '../core/pressures';
 import { calculatePumpParameters, findMinimumPumpPressure } from '../core/pump';
@@ -70,33 +75,21 @@ export function calculateSystem(config: SystemConfig): SystemResult {
   // 6. Calcula pressões preliminares com pressão de referência
   const preliminaryPressures = calculatePressures(graph, preliminaryResult.flows, 100);
 
-  // 7. Identifica os hidrantes mais desfavoráveis
-  const allHydrantsWithPressure: Array<{ id: string; pressure: number; nozzlePressure: number }> = [];
-  
-  for (const hydrant of hydrantNodes) {
-    const pressure = preliminaryPressures.get(hydrant.id)?.dynamicPressure || 0;
-    const nozzlePressure = calculateNozzlePressure(
-      pressure,
-      demandConfig.flowPerHydrant,
-      demandConfig.hoseLength,
-      demandConfig.hoseDiameter
-    );
-    allHydrantsWithPressure.push({
-      id: hydrant.id,
-      pressure,
-      nozzlePressure
-    });
-  }
-
-  // Ordena por pressão no esguicho (menor = mais desfavorável)
-  allHydrantsWithPressure.sort((a, b) => a.nozzlePressure - b.nozzlePressure);
+  // 7. Identifica os hidrantes mais desfavoráveis usando nozzlePressure
+  const allHydrantsRanked = findMostUnfavorableHydrants(
+    graph,
+    preliminaryPressures,
+    demandConfig.flowPerHydrant,
+    demandConfig.hoseLength,
+    demandConfig.hoseDiameter
+  );
 
   // Seleciona os N mais desfavoráveis conforme a norma
   const numSimultaneous = Math.min(demandConfig.simultaneousHydrants, hydrantNodes.length);
-  const activeHydrantIds = allHydrantsWithPressure.slice(0, numSimultaneous).map(h => h.id);
+  const activeHydrantIds = allHydrantsRanked.slice(0, numSimultaneous).map(h => h.nodeId);
   
-  // O mais favorável é o último da lista
-  const mostFavorable = allHydrantsWithPressure[allHydrantsWithPressure.length - 1];
+  // O mais favorável é o último da lista (maior nozzlePressure)
+  const mostFavorableFromList = allHydrantsRanked[allHydrantsRanked.length - 1];
 
   // 8. Cria demandas finais apenas para hidrantes ativos
   const finalDemands = new Map<string, number>();
@@ -121,6 +114,8 @@ export function calculateSystem(config: SystemConfig): SystemResult {
     hardyCrossResult.flows,
     demandConfig.minNozzlePressure,
     demandConfig.flowPerHydrant,
+    demandConfig.hoseLength,
+    demandConfig.hoseDiameter,
     config.pumpEfficiency || 0.65
   );
 
@@ -160,62 +155,64 @@ export function calculateSystem(config: SystemConfig): SystemResult {
     });
   }
 
-  // 13. Recalcula pressões finais nos hidrantes
-  const mostUnfavorableHydrants: Array<{ id: string; pressure: number; nozzlePressure: number }> = [];
-  const allHydrants: Array<{ id: string; pressure: number; status: 'ok' | 'low' }> = [];
+  // 13. Recalcula pressões finais nos hidrantes com nozzlePressure
+  const finalHydrantsRanked = findMostUnfavorableHydrants(
+    graph,
+    pressures,
+    demandConfig.flowPerHydrant,
+    demandConfig.hoseLength,
+    demandConfig.hoseDiameter
+  );
 
-  for (const hydrant of hydrantNodes) {
-    const pressure = pressures.get(hydrant.id)?.dynamicPressure || 0;
-    const nozzlePressure = calculateNozzlePressure(
-      pressure,
-      demandConfig.flowPerHydrant,
-      demandConfig.hoseLength,
-      demandConfig.hoseDiameter
-    );
+  const mostUnfavorableHydrants: Array<{ id: string; pressure: number; nozzlePressure: number; hoseLoss: number; isOk: boolean }> = [];
+  const allHydrants: Array<{ id: string; pressure: number; nozzlePressure: number; status: 'ok' | 'low' }> = [];
+
+  for (const h of finalHydrantsRanked) {
+    const isActive = activeHydrantIds.includes(h.nodeId);
+    const isOk = h.nozzlePressure >= demandConfig.minNozzlePressure;
     
     allHydrants.push({
-      id: hydrant.id,
-      pressure,
-      status: nozzlePressure >= demandConfig.minNozzlePressure ? 'ok' : 'low'
+      id: h.nodeId,
+      pressure: h.valvePressure,
+      nozzlePressure: h.nozzlePressure,
+      status: isOk ? 'ok' : 'low'
     });
 
-    if (activeHydrantIds.includes(hydrant.id)) {
+    if (isActive) {
       mostUnfavorableHydrants.push({
-        id: hydrant.id,
-        pressure,
-        nozzlePressure
+        id: h.nodeId,
+        pressure: h.valvePressure,
+        nozzlePressure: h.nozzlePressure,
+        hoseLoss: h.hoseLoss,
+        isOk
       });
     }
   }
 
-  // Ordena os mais desfavoráveis
-  mostUnfavorableHydrants.sort((a, b) => a.nozzlePressure - b.nozzlePressure);
+  // O mais favorável
+  const mostFavorableFinal = finalHydrantsRanked[finalHydrantsRanked.length - 1];
+  const mostFavorableHydrant = mostFavorableFinal ? {
+    id: mostFavorableFinal.nodeId,
+    pressure: mostFavorableFinal.valvePressure,
+    nozzlePressure: mostFavorableFinal.nozzlePressure
+  } : undefined;
 
-  // Recalcula o mais favorável com pressões finais
-  let mostFavorableHydrant: { id: string; pressure: number; nozzlePressure: number } | undefined;
-  let maxNozzlePressure = -Infinity;
+  // 14. Verificação final de pressões NO ESGUICHO
+  const pressureCheck = checkMinimumPressures(
+    graph, 
+    pressures, 
+    demandConfig.minNozzlePressure,
+    demandConfig.flowPerHydrant,
+    demandConfig.hoseLength,
+    demandConfig.hoseDiameter
+  );
   
-  for (const hydrant of hydrantNodes) {
-    const pressure = pressures.get(hydrant.id)?.dynamicPressure || 0;
-    const nozzlePressure = calculateNozzlePressure(
-      pressure,
-      demandConfig.flowPerHydrant,
-      demandConfig.hoseLength,
-      demandConfig.hoseDiameter
-    );
-    
-    if (nozzlePressure > maxNozzlePressure) {
-      maxNozzlePressure = nozzlePressure;
-      mostFavorableHydrant = { id: hydrant.id, pressure, nozzlePressure };
-    }
-  }
-
-  // 14. Verificação final de pressões
-  const pressureCheck = checkMinimumPressures(graph, pressures, demandConfig.minNozzlePressure);
   if (!pressureCheck.ok) {
     for (const v of pressureCheck.violations) {
       const node = graph.nodeMap.get(v.nodeId);
-      errors.push(`${node?.name || v.nodeId}: Pressão ${v.pressure.toFixed(2)} mca abaixo do mínimo`);
+      errors.push(
+        `${node?.name || v.nodeId}: P.esguicho ${v.nozzlePressure.toFixed(2)} mca < ${demandConfig.minNozzlePressure} mca (déficit: ${v.deficit.toFixed(2)} mca)`
+      );
     }
   }
 

@@ -1,14 +1,13 @@
 /**
  * Módulo de Cálculo da Bomba
  * 
- * Implementa:
- * - Busca binária para determinar pressão mínima da bomba
- * - Cálculo de potência hidráulica
- * - Cálculo de potência do motor (com rendimento)
+ * CORREÇÕES APLICADAS:
+ * - Busca binária usa nozzlePressure para validação
+ * - Parâmetros de mangueira passados explicitamente
  */
 
 import type { NetworkGraph, FlowResult, PumpResult } from '../models/types';
-import { calculatePressures, findMostUnfavorableHydrants, calculateNozzlePressure } from './pressures';
+import { calculatePressures, findMostUnfavorableHydrants, calculateNozzlePressure, calculateHoseLoss } from './pressures';
 import { WATER_DENSITY, GRAVITY, W_to_kW, kW_to_CV, m3s_to_Lmin } from './units';
 
 /** Pressão máxima de busca (mca) */
@@ -23,24 +22,33 @@ const DEFAULT_EFFICIENCY = 0.65;
 /**
  * Determina a pressão mínima da bomba usando busca binária
  * 
- * A bomba deve fornecer pressão tal que a menor pressão no esguicho
+ * A bomba deve fornecer pressão tal que a menor pressão NO ESGUICHO
  * seja >= pressão mínima requerida
+ * 
+ * CORREÇÃO: Usa nozzlePressure calculada consistentemente
  * 
  * @param graph - Grafo da rede
  * @param flows - Vazões calculadas
  * @param requiredNozzlePressure - Pressão mínima no esguicho (mca)
  * @param flowPerHydrant - Vazão por hidrante (L/min)
+ * @param hoseLength - Comprimento da mangueira (m)
+ * @param hoseDiameter - Diâmetro da mangueira (mm)
  * @returns Pressão mínima da bomba (mca)
  */
 export function findMinimumPumpPressure(
   graph: NetworkGraph,
   flows: Map<string, FlowResult>,
   requiredNozzlePressure: number,
-  flowPerHydrant: number
+  flowPerHydrant: number,
+  hoseLength: number = 30,
+  hoseDiameter: number = 40
 ): number {
   let low = 0;
   let high = MAX_SEARCH_PRESSURE;
   let result = high;
+
+  // Calcula perda na mangueira (constante para mesma vazão e mangueira)
+  const hoseLoss = calculateHoseLoss(flowPerHydrant, hoseLength, hoseDiameter, 120);
 
   while (high - low > SEARCH_PRECISION) {
     const mid = (low + high) / 2;
@@ -48,19 +56,24 @@ export function findMinimumPumpPressure(
     // Calcula pressões com esta pressão de bomba
     const pressures = calculatePressures(graph, flows, mid);
 
-    // Encontra os hidrantes mais desfavoráveis
-    const unfavorable = findMostUnfavorableHydrants(graph, pressures);
+    // Encontra os hidrantes ordenados por nozzlePressure
+    const ranked = findMostUnfavorableHydrants(
+      graph, 
+      pressures, 
+      flowPerHydrant, 
+      hoseLength, 
+      hoseDiameter
+    );
 
-    if (unfavorable.length === 0) {
+    if (ranked.length === 0) {
       // Sem hidrantes - erro de configuração
       break;
     }
 
-    // Calcula pressão no esguicho do hidrante mais desfavorável
-    const worstHydrantPressure = unfavorable[0].pressure;
-    const nozzlePressure = calculateNozzlePressure(worstHydrantPressure, flowPerHydrant);
+    // CORREÇÃO: Usa nozzlePressure diretamente do ranking
+    const worstNozzlePressure = ranked[0].nozzlePressure;
 
-    if (nozzlePressure >= requiredNozzlePressure) {
+    if (worstNozzlePressure >= requiredNozzlePressure) {
       // Pressão suficiente - tenta reduzir
       result = mid;
       high = mid;
@@ -117,6 +130,8 @@ export function calculateMotorPower(
  * @param flows - Vazões calculadas
  * @param requiredNozzlePressure - Pressão mínima no esguicho (mca)
  * @param flowPerHydrant - Vazão por hidrante (L/min)
+ * @param hoseLength - Comprimento da mangueira (m)
+ * @param hoseDiameter - Diâmetro da mangueira (mm)
  * @param efficiency - Rendimento da bomba
  * @returns Resultado completo da bomba
  */
@@ -125,6 +140,8 @@ export function calculatePumpParameters(
   flows: Map<string, FlowResult>,
   requiredNozzlePressure: number,
   flowPerHydrant: number,
+  hoseLength: number = 30,
+  hoseDiameter: number = 40,
   efficiency: number = DEFAULT_EFFICIENCY
 ): PumpResult {
   // Encontra pressão mínima
@@ -132,7 +149,9 @@ export function calculatePumpParameters(
     graph,
     flows,
     requiredNozzlePressure,
-    flowPerHydrant
+    flowPerHydrant,
+    hoseLength,
+    hoseDiameter
   );
 
   // Calcula vazão total do sistema
@@ -142,9 +161,6 @@ export function calculatePumpParameters(
     // Na prática, pegamos a maior vazão que representa a saída da bomba
     totalFlowM3s = Math.max(totalFlowM3s, Math.abs(flowResult.flow));
   }
-
-  // Ou calcular a partir das demandas (mais preciso)
-  // totalFlowM3s = soma das demandas ativas
 
   // Potência hidráulica
   const hydraulicPowerW = calculateHydraulicPower(totalFlowM3s, minPressure);
