@@ -1,6 +1,6 @@
 /**
  * Editor de Rede Hidráulica
- * Permite entrada de dados de nós e tubulações
+ * Permite entrada de dados de nós e tubulações com acessórios
  */
 
 import { useState } from 'react';
@@ -11,9 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Trash2, Settings2 } from 'lucide-react';
-import type { Node, Pipe, NodeType } from '@/models/types';
-import { HAZEN_WILLIAMS_COEFFICIENTS } from '@/core/hazen';
-import { mm_to_m } from '@/core/units';
+import type { Node, Pipe, NodeType, PipeMaterial, PipeAccessory } from '@/models/types';
+import { getHazenWilliamsC } from '@/core/equivalentLength';
+import { mm_to_m, m_to_mm } from '@/core/units';
+import { AccessoriesEditor } from './AccessoriesEditor';
+import { calculateTotalEquivalentLength } from '@/core/equivalentLength';
 
 interface NetworkEditorProps {
   nodes: Node[];
@@ -29,11 +31,10 @@ const NODE_TYPES: { value: NodeType; label: string }[] = [
   { value: 'hydrant', label: 'Hidrante' },
 ];
 
-const PIPE_MATERIALS = Object.entries(HAZEN_WILLIAMS_COEFFICIENTS).map(([key, value]) => ({
-  value: key,
-  label: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-  coefficient: value
-}));
+const PIPE_MATERIALS: { value: PipeMaterial; label: string; coefficient: number }[] = [
+  { value: 'PVC', label: 'PVC', coefficient: getHazenWilliamsC('PVC') },
+  { value: 'Metal', label: 'Aço/Ferro', coefficient: getHazenWilliamsC('Metal') },
+];
 
 const STANDARD_DIAMETERS = [25, 32, 40, 50, 65, 80, 100, 125, 150, 200];
 
@@ -60,7 +61,6 @@ export function NetworkEditor({ nodes, pipes, onNodesChange, onPipesChange }: Ne
   const removeNode = (index: number) => {
     const nodeId = nodes[index].id;
     onNodesChange(nodes.filter((_, i) => i !== index));
-    // Remove pipes connected to this node
     onPipesChange(pipes.filter(p => p.startNodeId !== nodeId && p.endNodeId !== nodeId));
   };
 
@@ -73,8 +73,9 @@ export function NetworkEditor({ nodes, pipes, onNodesChange, onPipesChange }: Ne
       endNodeId: nodes[1]?.id || nodes[0]?.id || '',
       length: 10,
       diameter: mm_to_m(50),
-      roughness: 140,
-      material: 'pvc',
+      roughness: getHazenWilliamsC('PVC'),
+      material: 'PVC',
+      accessories: [],
       equivalentLength: 0,
     };
     onPipesChange([...pipes, newPipe]);
@@ -83,6 +84,19 @@ export function NetworkEditor({ nodes, pipes, onNodesChange, onPipesChange }: Ne
   const updatePipe = (index: number, field: keyof Pipe, value: any) => {
     const updated = [...pipes];
     updated[index] = { ...updated[index], [field]: value };
+    
+    // Recalculate Leq if diameter or material changed
+    if (field === 'diameter' || field === 'material') {
+      const pipe = updated[index];
+      const diameterMm = Math.round(m_to_mm(pipe.diameter));
+      const leq = calculateTotalEquivalentLength(
+        pipe.accessories || [], 
+        diameterMm, 
+        pipe.material as PipeMaterial
+      );
+      updated[index].equivalentLength = leq;
+    }
+    
     onPipesChange(updated);
   };
 
@@ -90,13 +104,41 @@ export function NetworkEditor({ nodes, pipes, onNodesChange, onPipesChange }: Ne
     onPipesChange(pipes.filter((_, i) => i !== index));
   };
 
-  const updatePipeMaterial = (index: number, materialKey: string) => {
+  const updatePipeMaterial = (index: number, material: PipeMaterial) => {
     const updated = [...pipes];
-    const material = PIPE_MATERIALS.find(m => m.value === materialKey);
     updated[index] = { 
       ...updated[index], 
-      material: materialKey,
-      roughness: material?.coefficient || 140
+      material,
+      roughness: getHazenWilliamsC(material)
+    };
+    
+    // Recalculate Leq
+    const pipe = updated[index];
+    const diameterMm = Math.round(m_to_mm(pipe.diameter));
+    const leq = calculateTotalEquivalentLength(
+      pipe.accessories || [], 
+      diameterMm, 
+      material
+    );
+    updated[index].equivalentLength = leq;
+    
+    onPipesChange(updated);
+  };
+
+  const updatePipeAccessories = (index: number, accessories: PipeAccessory[]) => {
+    const updated = [...pipes];
+    const pipe = updated[index];
+    const diameterMm = Math.round(m_to_mm(pipe.diameter));
+    const leq = calculateTotalEquivalentLength(
+      accessories, 
+      diameterMm, 
+      pipe.material as PipeMaterial
+    );
+    
+    updated[index] = { 
+      ...updated[index], 
+      accessories,
+      equivalentLength: leq
     };
     onPipesChange(updated);
   };
@@ -194,14 +236,24 @@ export function NetworkEditor({ nodes, pipes, onNodesChange, onPipesChange }: Ne
               >
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs text-primary">{pipe.id}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                    onClick={() => removePipe(index)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <AccessoriesEditor
+                      pipeId={pipe.id}
+                      pipeName={pipe.name}
+                      diameterM={pipe.diameter}
+                      material={pipe.material as PipeMaterial}
+                      accessories={pipe.accessories || []}
+                      onAccessoriesChange={(acc) => updatePipeAccessories(index, acc)}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => removePipe(index)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -217,7 +269,7 @@ export function NetworkEditor({ nodes, pipes, onNodesChange, onPipesChange }: Ne
                     <Label className="text-xs text-muted-foreground">Material</Label>
                     <Select
                       value={pipe.material}
-                      onValueChange={(value) => updatePipeMaterial(index, value)}
+                      onValueChange={(value) => updatePipeMaterial(index, value as PipeMaterial)}
                     >
                       <SelectTrigger className="h-8 text-sm">
                         <SelectValue />
@@ -306,9 +358,9 @@ export function NetworkEditor({ nodes, pipes, onNodesChange, onPipesChange }: Ne
                     <Input
                       type="number"
                       step="0.1"
-                      value={pipe.equivalentLength || 0}
-                      onChange={(e) => updatePipe(index, 'equivalentLength', parseFloat(e.target.value) || 0)}
-                      className="h-8 text-sm font-mono"
+                      value={(pipe.equivalentLength || 0).toFixed(2)}
+                      readOnly
+                      className="h-8 text-sm font-mono bg-muted/50"
                     />
                   </div>
                 </div>

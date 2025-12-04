@@ -1,6 +1,6 @@
 /**
- * Painel de Resultados
- * Exibe os resultados do cálculo hidráulico
+ * Painel de Resultados - NTCB 19/2020
+ * Exibe os resultados do cálculo hidráulico com análise completa
  */
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,10 +22,11 @@ import {
   Droplets,
   Gauge,
   Activity,
-  FileText
+  FileText,
+  Flame
 } from 'lucide-react';
 import type { SystemResult } from '@/models/types';
-import { m_to_mm, m3s_to_Lmin } from '@/core/units';
+import { HydrantAnalysisPanel } from './HydrantAnalysisPanel';
 
 interface ResultsPanelProps {
   result: SystemResult | null;
@@ -66,240 +67,265 @@ export function ResultsPanel({ result, isCalculating }: ResultsPanelProps) {
                 result.checks.errors.length === 0;
 
   return (
-    <Card className="tech-card">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2 text-lg">
-            <FileText className="h-5 w-5 text-primary" />
-            Resultados
-          </span>
-          <Badge className={allOk ? 'status-ok' : 'status-error'}>
-            {allOk ? (
-              <><CheckCircle2 className="h-3 w-3 mr-1" /> Sistema OK</>
-            ) : (
-              <><XCircle className="h-3 w-3 mr-1" /> Verificar</>
-            )}
-          </Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="summary">
-          <TabsList className="grid w-full grid-cols-4 mb-4">
-            <TabsTrigger value="summary" className="text-xs">Resumo</TabsTrigger>
-            <TabsTrigger value="pipes" className="text-xs">Trechos</TabsTrigger>
-            <TabsTrigger value="hydrants" className="text-xs">Hidrantes</TabsTrigger>
-            <TabsTrigger value="pump" className="text-xs">Bomba</TabsTrigger>
-          </TabsList>
+    <div className="space-y-6">
+      {/* Main Results Card */}
+      <Card className="tech-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2 text-lg">
+              <FileText className="h-5 w-5 text-primary" />
+              Resultados - NTCB 19/2020
+            </span>
+            <Badge className={allOk ? 'status-ok' : 'status-error'}>
+              {allOk ? (
+                <><CheckCircle2 className="h-3 w-3 mr-1" /> Sistema OK</>
+              ) : (
+                <><XCircle className="h-3 w-3 mr-1" /> Verificar</>
+              )}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="summary">
+            <TabsList className="grid w-full grid-cols-4 mb-4">
+              <TabsTrigger value="summary" className="text-xs">Resumo</TabsTrigger>
+              <TabsTrigger value="pipes" className="text-xs">Trechos</TabsTrigger>
+              <TabsTrigger value="pump" className="text-xs">Bomba</TabsTrigger>
+              <TabsTrigger value="normative" className="text-xs">Norma</TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="summary" className="space-y-4">
-            {/* Verificações */}
-            <div className="grid grid-cols-3 gap-3">
-              <StatusCard 
-                label="Pressões" 
-                ok={result.checks.minPressureOk} 
-                icon={Gauge}
-              />
-              <StatusCard 
-                label="Velocidades" 
-                ok={result.checks.velocitiesOk} 
-                icon={Activity}
-              />
-              <StatusCard 
-                label="Balanço de Massa" 
-                ok={result.checks.massBalanceOk} 
-                icon={Droplets}
-              />
-            </div>
-
-            {/* Hardy-Cross */}
-            <div className="p-3 bg-muted/30 rounded-lg border border-border">
-              <div className="text-xs text-muted-foreground mb-2">Solver Hardy-Cross</div>
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-sm">
-                  {result.hydraulics.hardyCross.loops} loop(s)
-                </span>
-                <Badge variant="outline" className="font-mono">
-                  {result.hydraulics.hardyCross.iterations} iterações
-                </Badge>
+            <TabsContent value="summary" className="space-y-4">
+              {/* Verificações */}
+              <div className="grid grid-cols-3 gap-3">
+                <StatusCard 
+                  label="Pressões" 
+                  ok={result.checks.minPressureOk} 
+                  icon={Gauge}
+                />
+                <StatusCard 
+                  label="Velocidades" 
+                  ok={result.checks.velocitiesOk} 
+                  icon={Activity}
+                />
+                <StatusCard 
+                  label="Balanço de Massa" 
+                  ok={result.checks.massBalanceOk} 
+                  icon={Droplets}
+                />
               </div>
-            </div>
 
-            {/* Avisos e Erros */}
-            {result.checks.warnings.length > 0 && (
-              <div className="space-y-2">
-                {result.checks.warnings.map((w, i) => (
-                  <div key={i} className="flex items-start gap-2 p-2 bg-warning/10 rounded border border-warning/30">
-                    <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
-                    <span className="text-xs text-warning">{w}</span>
-                  </div>
-                ))}
+              {/* Hardy-Cross */}
+              <div className="p-3 bg-muted/30 rounded-lg border border-border">
+                <div className="text-xs text-muted-foreground mb-2">Solver Hardy-Cross</div>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-sm">
+                    {result.hydraulics.hardyCross.loops} loop(s)
+                  </span>
+                  <Badge variant="outline" className="font-mono">
+                    {result.hydraulics.hardyCross.iterations} iterações
+                  </Badge>
+                </div>
               </div>
-            )}
 
-            {result.checks.errors.length > 0 && (
-              <div className="space-y-2">
-                {result.checks.errors.map((e, i) => (
-                  <div key={i} className="flex items-start gap-2 p-2 bg-destructive/10 rounded border border-destructive/30">
-                    <XCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                    <span className="text-xs text-destructive">{e}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Reserva */}
-            <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
-              <div className="text-xs text-muted-foreground mb-1">Reserva Técnica Requerida</div>
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xl font-semibold text-primary">
-                  {result.reserve.volumeM3.toFixed(1)} m³
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  ({result.reserve.volumeLiters.toLocaleString()} L para {result.reserve.timeMinutes} min)
-                </span>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="pipes">
-            <div className="rounded-lg border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="font-mono text-xs">Trecho</TableHead>
-                    <TableHead className="font-mono text-xs text-right">Q (L/min)</TableHead>
-                    <TableHead className="font-mono text-xs text-right">V (m/s)</TableHead>
-                    <TableHead className="font-mono text-xs text-right">J (m/m)</TableHead>
-                    <TableHead className="font-mono text-xs text-right">ΔH (mca)</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {result.hydraulics.pipeDetails.map((pipe) => (
-                    <TableRow key={pipe.pipeId} className="font-mono text-sm">
-                      <TableCell>{pipe.pipeId}</TableCell>
-                      <TableCell className="text-right">{pipe.flowLmin.toFixed(1)}</TableCell>
-                      <TableCell className="text-right">
-                        <span className={
-                          pipe.velocityStatus === 'high' ? 'text-destructive' :
-                          pipe.velocityStatus === 'low' ? 'text-warning' : ''
-                        }>
-                          {pipe.velocity.toFixed(2)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">{pipe.headLossUnit.toFixed(4)}</TableCell>
-                      <TableCell className="text-right">{pipe.headLossTotal.toFixed(2)}</TableCell>
-                    </TableRow>
+              {/* Avisos e Erros */}
+              {result.checks.warnings.length > 0 && (
+                <div className="space-y-2">
+                  {result.checks.warnings.map((w, i) => (
+                    <div key={i} className="flex items-start gap-2 p-2 bg-warning/10 rounded border border-warning/30">
+                      <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+                      <span className="text-xs text-warning">{w}</span>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
-            </div>
-          </TabsContent>
+                </div>
+              )}
 
-          <TabsContent value="hydrants" className="space-y-4">
-            <div className="p-3 bg-accent/10 rounded-lg border border-accent/30">
-              <div className="text-xs text-muted-foreground mb-2">Hidrantes Mais Desfavoráveis</div>
-              <div className="space-y-2">
-                {result.hydrants.mostUnfavorable.map((h, i) => (
-                  <div key={h.id} className="flex items-center justify-between p-2 bg-background/50 rounded">
-                    <span className="font-mono text-sm">
-                      {i + 1}º - {h.id}
-                    </span>
-                    <div className="text-right">
-                      <div className="font-mono text-sm">
-                        <span className="text-muted-foreground">P: </span>
-                        {h.pressure.toFixed(2)} mca
-                      </div>
-                      <div className="font-mono text-xs text-muted-foreground">
-                        Esguicho: {h.nozzlePressure.toFixed(2)} mca
-                      </div>
+              {result.checks.errors.length > 0 && (
+                <div className="space-y-2">
+                  {result.checks.errors.map((e, i) => (
+                    <div key={i} className="flex items-start gap-2 p-2 bg-destructive/10 rounded border border-destructive/30">
+                      <XCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                      <span className="text-xs text-destructive">{e}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Reserva */}
+              <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
+                <div className="text-xs text-muted-foreground mb-1">Reserva Técnica de Incêndio (RTI)</div>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xl font-semibold text-primary">
+                    {result.reserve.volumeM3.toFixed(1)} m³
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    ({result.reserve.volumeLiters.toLocaleString()} L)
+                  </span>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="pipes">
+              <div className="rounded-lg border border-border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30">
+                      <TableHead className="font-mono text-xs">Trecho</TableHead>
+                      <TableHead className="font-mono text-xs text-right">Q (L/min)</TableHead>
+                      <TableHead className="font-mono text-xs text-right">V (m/s)</TableHead>
+                      <TableHead className="font-mono text-xs text-right">J (m/m)</TableHead>
+                      <TableHead className="font-mono text-xs text-right">Leq (m)</TableHead>
+                      <TableHead className="font-mono text-xs text-right">ΔH (mca)</TableHead>
+                      <TableHead className="font-mono text-xs text-right">Pi (mca)</TableHead>
+                      <TableHead className="font-mono text-xs text-right">Pf (mca)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {result.hydraulics.pipeDetails.map((pipe) => (
+                      <TableRow key={pipe.pipeId} className="font-mono text-sm">
+                        <TableCell>{pipe.pipeId}</TableCell>
+                        <TableCell className="text-right">{pipe.flowLmin.toFixed(1)}</TableCell>
+                        <TableCell className="text-right">
+                          <span className={
+                            pipe.velocityStatus === 'high' ? 'text-destructive' :
+                            pipe.velocityStatus === 'low' ? 'text-warning' : ''
+                          }>
+                            {pipe.velocity.toFixed(2)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">{pipe.headLossUnit.toFixed(4)}</TableCell>
+                        <TableCell className="text-right">{(pipe.equivalentLength || 0).toFixed(1)}</TableCell>
+                        <TableCell className="text-right">{pipe.headLossTotal.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">{pipe.startPressure.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">{pipe.endPressure.toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="pump" className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-primary/10 rounded-lg border border-primary/30 space-y-1">
+                  <div className="text-xs text-muted-foreground">Altura Manométrica</div>
+                  <div className="font-mono text-2xl font-bold text-primary">
+                    {result.pump.minPressure.toFixed(1)}
+                    <span className="text-sm font-normal ml-1">mca</span>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-accent/10 rounded-lg border border-accent/30 space-y-1">
+                  <div className="text-xs text-muted-foreground">Vazão Total</div>
+                  <div className="font-mono text-2xl font-bold text-accent">
+                    {result.pump.totalFlowLmin.toFixed(0)}
+                    <span className="text-sm font-normal ml-1">L/min</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-muted/30 rounded-lg border border-border space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="h-5 w-5 text-warning" />
+                  <span className="font-semibold">Potência da Bomba</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Potência Hidráulica</div>
+                    <div className="font-mono text-lg">
+                      {result.pump.hydraulicPower.toFixed(2)} kW
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Potência do Motor</div>
+                    <div className="font-mono text-lg">
+                      {result.pump.motorPower.toFixed(2)} kW
+                    </div>
+                  </div>
+                </div>
 
-            <div className="rounded-lg border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="font-mono text-xs">Hidrante</TableHead>
-                    <TableHead className="font-mono text-xs text-right">Pressão (mca)</TableHead>
-                    <TableHead className="font-mono text-xs text-center">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {result.hydrants.all.map((h) => (
-                    <TableRow key={h.id} className="font-mono text-sm">
-                      <TableCell>{h.id}</TableCell>
-                      <TableCell className="text-right">{h.pressure.toFixed(2)}</TableCell>
-                      <TableCell className="text-center">
-                        {h.status === 'ok' ? (
-                          <CheckCircle2 className="h-4 w-4 text-success inline" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-destructive inline" />
-                        )}
-                      </TableCell>
-                    </TableRow>
+                <div className="pt-3 border-t border-border">
+                  <div className="text-xs text-muted-foreground mb-1">Potência Comercial</div>
+                  <div className="font-mono text-3xl font-bold text-warning">
+                    {result.pump.commercialPowerCV} CV
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    ({result.pump.motorPowerCV.toFixed(2)} CV calculado | η = {(result.pump.efficiency * 100).toFixed(0)}%)
+                  </div>
+                </div>
+              </div>
+
+              {/* Fórmula */}
+              <div className="p-3 bg-muted/20 rounded-lg text-xs text-muted-foreground font-mono">
+                <div>CV = (Q × H × 1000) / (75 × η)</div>
+                <div className="mt-1">
+                  CV = ({result.pump.totalFlowLmin.toFixed(1)}/60000 × {result.pump.minPressure.toFixed(1)} × 1000) / (75 × {result.pump.efficiency})
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="normative" className="space-y-4">
+              {/* Normative Classification */}
+              <div className="p-4 bg-secondary/30 rounded-lg border border-border space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Flame className="h-5 w-5 text-primary" />
+                  <span className="font-semibold">Enquadramento NTCB 19/2020</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Tipo de Sistema:</span>
+                    <div className="font-mono font-semibold">
+                      Tipo {result.config.ntcbSystemType}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Nome:</span>
+                    <div className="font-semibold">
+                      {result.config.buildingClassification?.name || 'Sistema de Hidrantes'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-sm pt-3 border-t border-border">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Vazão Mínima:</span>
+                    <span className="font-mono">{result.config.demandConfig.flowPerHydrant} L/min</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Hidrantes Simult.:</span>
+                    <span className="font-mono">{result.config.demandConfig.simultaneousHydrants}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Pressão Mín. Esguicho:</span>
+                    <span className="font-mono">{result.config.demandConfig.minNozzlePressure} mca</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Mangueira Máx.:</span>
+                    <span className="font-mono">{result.config.demandConfig.hoseLength} m</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Active Hydrants */}
+              <div className="p-3 bg-accent/10 rounded-lg border border-accent/30">
+                <div className="text-xs text-muted-foreground mb-2">Hidrantes Ativos (Cálculo)</div>
+                <div className="flex flex-wrap gap-2">
+                  {result.config.activeHydrants.map((id, i) => (
+                    <Badge key={id} variant="outline" className="font-mono">
+                      {i + 1}º - {id}
+                    </Badge>
                   ))}
-                </TableBody>
-              </Table>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="pump" className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-primary/10 rounded-lg border border-primary/30 space-y-1">
-                <div className="text-xs text-muted-foreground">Pressão Mínima</div>
-                <div className="font-mono text-2xl font-bold text-primary">
-                  {result.pump.minPressure.toFixed(1)}
-                  <span className="text-sm font-normal ml-1">mca</span>
                 </div>
               </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
 
-              <div className="p-4 bg-accent/10 rounded-lg border border-accent/30 space-y-1">
-                <div className="text-xs text-muted-foreground">Vazão Total</div>
-                <div className="font-mono text-2xl font-bold text-accent">
-                  {result.pump.totalFlowLmin.toFixed(0)}
-                  <span className="text-sm font-normal ml-1">L/min</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 bg-muted/30 rounded-lg border border-border space-y-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Zap className="h-5 w-5 text-warning" />
-                <span className="font-semibold">Potência da Bomba</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-xs text-muted-foreground">Potência Hidráulica</div>
-                  <div className="font-mono text-lg">
-                    {result.pump.hydraulicPower.toFixed(2)} kW
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Potência do Motor</div>
-                  <div className="font-mono text-lg">
-                    {result.pump.motorPower.toFixed(2)} kW
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-border">
-                <div className="text-xs text-muted-foreground mb-1">Potência Comercial</div>
-                <div className="font-mono text-3xl font-bold text-warning">
-                  {result.pump.commercialPowerCV} CV
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  ({result.pump.motorPowerCV.toFixed(2)} CV calculado | η = {(result.pump.efficiency * 100).toFixed(0)}%)
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+      {/* Hydrant Analysis Panel */}
+      <HydrantAnalysisPanel result={result} />
+    </div>
   );
 }
 
