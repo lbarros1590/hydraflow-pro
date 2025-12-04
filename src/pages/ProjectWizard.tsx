@@ -1,12 +1,13 @@
 /**
- * Project Wizard - 4-step creation flow
+ * Project Wizard - 4-step creation flow with Supabase
  */
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useProject } from '@/contexts/ProjectContext';
-import { projectFormSchema, type ProjectFormData } from '@/components/Wizard/types';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { projectFormSchema, type ProjectFormData, type ProjectStatus } from '@/components/Wizard/types';
 import { Form } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { 
@@ -18,10 +19,10 @@ import {
   Tag,
   ClipboardCheck,
   Check,
-  Home
+  Home,
+  Loader2
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { Link } from 'react-router-dom';
 
 // Step Components
 import { IdentificationStep } from '@/components/Wizard/Steps/IdentificationStep';
@@ -55,13 +56,24 @@ const defaultValues: ProjectFormData = {
   exemptMeasures: [],
 };
 
+function calculateRiskClass(data: ProjectFormData): 'baixo' | 'medio' | 'alto' {
+  if (!data.sectors || data.sectors.length === 0) return 'medio';
+  const maxFireLoad = Math.max(...data.sectors.map(s => s.fireLoad || 300));
+  const hasSpecialRisks = data.specialRisks && data.specialRisks.length > 0;
+  if (maxFireLoad > 1200 || hasSpecialRisks) return 'alto';
+  if (maxFireLoad > 300) return 'medio';
+  return 'baixo';
+}
+
 export default function ProjectWizard() {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditing = id && id !== 'new';
+  const { user } = useAuth();
   
-  const { saveProject, updateProject, getProjectById, setCurrentProject } = useProject();
   const [currentStep, setCurrentStep] = useState<StepId>('identification');
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(!!isEditing);
 
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectFormSchema),
@@ -71,16 +83,31 @@ export default function ProjectWizard() {
 
   // Load existing project if editing
   useEffect(() => {
-    if (isEditing) {
-      const existingProject = getProjectById(id);
-      if (existingProject) {
-        form.reset(existingProject.data);
-        setCurrentProject(existingProject);
-      } else {
-        navigate('/');
-      }
+    if (isEditing && id) {
+      loadProject(id);
     }
-  }, [id, isEditing, getProjectById, form, navigate, setCurrentProject]);
+  }, [id, isEditing]);
+
+  const loadProject = async (projectId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', projectId)
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        form.reset(data.data as ProjectFormData);
+      }
+    } catch (error) {
+      console.error('Error loading project:', error);
+      toast({ title: 'Erro', description: 'Projeto não encontrado.', variant: 'destructive' });
+      navigate('/app/projects');
+    } finally {
+      setInitialLoading(false);
+    }
+  };
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep);
 
@@ -93,8 +120,8 @@ export default function ProjectWizard() {
     };
 
     const fields = fieldsToValidate[currentStep];
-    const result = await form.trigger(fields);
-    return result;
+    if (fields.length === 0) return true;
+    return await form.trigger(fields);
   };
 
   const handleNext = async () => {
@@ -119,22 +146,55 @@ export default function ProjectWizard() {
     }
   };
 
-  const handleSave = async (status: 'rascunho' | 'em_andamento' | 'concluido' = 'em_andamento') => {
-    const data = form.getValues();
+  const handleSave = async (status: ProjectStatus = 'em_andamento') => {
+    if (!user) return;
     
-    if (isEditing) {
-      updateProject(id, data, status);
-      toast({
-        title: 'Projeto atualizado',
-        description: 'As alterações foram salvas com sucesso.',
-      });
-    } else {
-      const newProject = saveProject(data, status);
-      toast({
-        title: 'Projeto criado',
-        description: 'O projeto foi salvo com sucesso.',
-      });
-      navigate(`/project/${newProject.id}/hydraulic`);
+    setLoading(true);
+    const data = form.getValues();
+    const riskClass = calculateRiskClass(data);
+    
+    try {
+      if (isEditing && id) {
+        const { error } = await supabase
+          .from('projects')
+          .update({
+            data: JSON.parse(JSON.stringify(data)),
+            status,
+            risk_class: riskClass,
+          })
+          .eq('id', id);
+
+        if (error) throw error;
+        toast({ title: 'Projeto atualizado', description: 'As alterações foram salvas com sucesso.' });
+        
+        if (status === 'em_andamento') {
+          navigate(`/app/projects/${id}/hydraulic`);
+        }
+      } else {
+        const { data: newProject, error } = await supabase
+          .from('projects')
+          .insert([{
+            user_id: user.id,
+            state_code: data.state || 'MT',
+            data: JSON.parse(JSON.stringify(data)),
+            status,
+            risk_class: riskClass,
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+        toast({ title: 'Projeto criado', description: 'O projeto foi salvo com sucesso.' });
+        
+        if (newProject && status === 'em_andamento') {
+          navigate(`/app/projects/${newProject.id}/hydraulic`);
+        }
+      }
+    } catch (error) {
+      console.error('Error saving project:', error);
+      toast({ title: 'Erro', description: 'Não foi possível salvar o projeto.', variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -148,9 +208,16 @@ export default function ProjectWizard() {
       });
       return;
     }
-
     await handleSave('em_andamento');
   };
+
+  if (initialLoading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
@@ -159,7 +226,7 @@ export default function ProjectWizard() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link to="/">
+              <Link to="/app/projects">
                 <Button variant="ghost" size="icon">
                   <Home className="h-5 w-5" />
                 </Button>
@@ -169,7 +236,7 @@ export default function ProjectWizard() {
                   {isEditing ? 'Editar Projeto' : 'Novo Projeto'}
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Assistente de criação PSCIP
+                  Assistente de criação PSCIP - Mato Grosso
                 </p>
               </div>
             </div>
@@ -177,6 +244,7 @@ export default function ProjectWizard() {
             <Button 
               variant="outline" 
               onClick={() => handleSave('rascunho')}
+              disabled={loading}
               className="gap-2"
             >
               <Save className="h-4 w-4" />
@@ -238,7 +306,7 @@ export default function ProjectWizard() {
       </div>
 
       {/* Content */}
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 pb-24">
         <Form {...form}>
           <form className="max-w-4xl mx-auto">
             {currentStep === 'identification' && <IdentificationStep form={form} />}
@@ -268,9 +336,18 @@ export default function ProjectWizard() {
             </span>
 
             {currentStepIndex === STEPS.length - 1 ? (
-              <Button onClick={handleFinish} className="gap-2">
-                Finalizar e Calcular
-                <Check className="h-4 w-4" />
+              <Button onClick={handleFinish} disabled={loading} className="gap-2">
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    Finalizar e Calcular
+                    <Check className="h-4 w-4" />
+                  </>
+                )}
               </Button>
             ) : (
               <Button onClick={handleNext} className="gap-2">
