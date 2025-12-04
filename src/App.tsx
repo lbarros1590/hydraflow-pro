@@ -16,6 +16,7 @@ import ProjectDetail from "./pages/ProjectDetail";
 import HydraulicPage from "./pages/HydraulicPage";
 import StandaloneCalculator from "./pages/StandaloneCalculator";
 import SprinklerCalculator from "./pages/SprinklerCalculator";
+import SeparationCalculator from "./pages/SeparationCalculator";
 import DocsPage from "./pages/DocsPage";
 import AssistantPage from "./pages/AssistantPage";
 import RegulationsAdmin from "./pages/admin/RegulationsAdmin";
@@ -53,6 +54,7 @@ const App = () => (
               <Route path="projects/:id/hydraulic" element={<HydraulicPage />} />
               <Route path="calculator" element={<StandaloneCalculator />} />
               <Route path="calculator/sprinkler" element={<SprinklerCalculator />} />
+              <Route path="calculator/separacao" element={<SeparationCalculator />} />
               <Route path="docs" element={<DocsPage />} />
               <Route path="assistant" element={<AssistantPage />} />
               <Route path="admin/regulations" element={<RegulationsAdmin />} />
