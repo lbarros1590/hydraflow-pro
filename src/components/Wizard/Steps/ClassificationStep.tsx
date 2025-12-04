@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { OCCUPANCY_DIVISIONS, OCCUPANCY_GROUPS } from '@/core/ntcbClassification';
 import { cn } from '@/lib/utils';
+import FloatingChatbot from '@/components/FloatingChatbot';
 
 interface ClassificationStepProps {
   form: UseFormReturn<ProjectFormData>;
@@ -70,6 +71,7 @@ export function ClassificationStep({ form }: ClassificationStepProps) {
   const [openCombobox, setOpenCombobox] = useState<string | null>(null);
 
   const sectors = form.watch('sectors') || [];
+  const stateCode = form.watch('stateCode') || 'MT';
 
   const toggleSector = (id: string) => {
     setOpenSectors(prev => ({ ...prev, [id]: !prev[id] }));
@@ -462,6 +464,20 @@ export function ClassificationStep({ form }: ClassificationStepProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Floating Chatbot for classification help */}
+      <FloatingChatbot
+        stateCode={stateCode}
+        title="Ajuda Classificação"
+        placeholder="Dúvidas sobre classificação..."
+        context="O usuário está classificando setores de uma edificação. Ajude com dúvidas sobre divisões de ocupação (A-1, C-2, etc), carga de incêndio, população e requisitos normativos."
+        suggestions={[
+          'Como classificar uma loja de roupas?',
+          'Qual a carga de incêndio para restaurante?',
+          'Quando usar divisão H-3?',
+          'Como calcular população de shopping?',
+        ]}
+      />
     </div>
   );
 }
