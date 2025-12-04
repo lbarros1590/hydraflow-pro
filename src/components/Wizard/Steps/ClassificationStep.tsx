@@ -1,5 +1,6 @@
 /**
  * Step 3 - Intelligent Classification (Occupancy)
+ * Fixed: Added type="button" to prevent form submission
  */
 import { useState, useMemo } from 'react';
 import { UseFormReturn, useFieldArray } from 'react-hook-form';
@@ -74,7 +75,10 @@ export function ClassificationStep({ form }: ClassificationStepProps) {
     setOpenSectors(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleAddSector = () => {
+  const handleAddSector = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     const newSector: SectorFormData = {
       id: generateSectorId(),
       name: `Setor ${fields.length + 1}`,
@@ -89,6 +93,12 @@ export function ClassificationStep({ form }: ClassificationStepProps) {
     };
     append(newSector);
     setOpenSectors(prev => ({ ...prev, [newSector.id]: true }));
+  };
+
+  const handleRemoveSector = (e: React.MouseEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    remove(index);
   };
 
   const handleSelectCNAE = (index: number, cnae: typeof CNAE_DATA[0]) => {
@@ -156,7 +166,7 @@ export function ClassificationStep({ form }: ClassificationStepProps) {
                 Adicione os setores da edificação e classifique cada um
               </CardDescription>
             </div>
-            <Button onClick={handleAddSector} className="gap-2">
+            <Button type="button" onClick={handleAddSector} className="gap-2">
               <Plus className="h-4 w-4" />
               Adicionar Setor
             </Button>
@@ -170,7 +180,7 @@ export function ClassificationStep({ form }: ClassificationStepProps) {
               <p className="text-muted-foreground mb-4">
                 Adicione pelo menos um setor para classificar a edificação
               </p>
-              <Button onClick={handleAddSector} variant="outline" className="gap-2">
+              <Button type="button" onClick={handleAddSector} variant="outline" className="gap-2">
                 <Plus className="h-4 w-4" />
                 Adicionar Primeiro Setor
               </Button>
@@ -206,12 +216,10 @@ export function ClassificationStep({ form }: ClassificationStepProps) {
                         </div>
                         <div className="flex items-center gap-2">
                           <Button
+                            type="button"
                             variant="ghost"
                             size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              remove(index);
-                            }}
+                            onClick={(e) => handleRemoveSector(e, index)}
                             className="text-destructive hover:text-destructive"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -292,6 +300,7 @@ export function ClassificationStep({ form }: ClassificationStepProps) {
                               >
                                 <PopoverTrigger asChild>
                                   <Button
+                                    type="button"
                                     variant="outline"
                                     role="combobox"
                                     className="w-full justify-between"
@@ -359,11 +368,14 @@ export function ClassificationStep({ form }: ClassificationStepProps) {
                                             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted">
                                               Grupo {group.group} - {group.name}
                                             </div>
-                                            {OCCUPANCY_DIVISIONS.filter(d => d.group === group.group).map((division) => (
-                                              <SelectItem key={division.code} value={division.code}>
-                                                {division.code} - {division.name}
-                                              </SelectItem>
-                                            ))}
+                                            {OCCUPANCY_DIVISIONS
+                                              .filter(d => d.group === group.group)
+                                              .map((div) => (
+                                                <SelectItem key={div.code} value={div.code}>
+                                                  <span className="font-medium">{div.code}</span> - {div.name}
+                                                </SelectItem>
+                                              ))
+                                            }
                                           </div>
                                         ))}
                                       </SelectContent>
@@ -372,41 +384,33 @@ export function ClassificationStep({ form }: ClassificationStepProps) {
                                   </FormItem>
                                 )}
                               />
-
-                              {sectors[index]?.occupancyCode && (
-                                <div className="rounded-lg bg-muted/50 p-3 flex items-start gap-2">
-                                  <Info className="h-4 w-4 text-primary mt-0.5" />
-                                  <div className="text-sm">
-                                    <p className="font-medium">
-                                      {OCCUPANCY_DIVISIONS.find(d => d.code === sectors[index].occupancyCode)?.name}
-                                    </p>
-                                    <p className="text-muted-foreground">
-                                      {OCCUPANCY_DIVISIONS.find(d => d.code === sectors[index].occupancyCode)?.description}
-                                    </p>
-                                  </div>
-                                </div>
-                              )}
                             </TabsContent>
                           </Tabs>
                         </div>
 
-                        {/* Calculated Fields */}
+                        {/* Selected Occupancy Info */}
                         {sectors[index]?.occupancyCode && (
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="rounded-lg border border-border p-4">
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                                <Flame className="h-4 w-4" />
-                                Carga de Incêndio
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <Flame className="h-4 w-4 text-orange-500" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Carga de Incêndio</p>
+                                <p className="font-medium">{sectors[index].fireLoad || 300} MJ/m²</p>
                               </div>
-                              <p className="text-2xl font-bold">{sectors[index]?.fireLoad || 300} <span className="text-sm font-normal text-muted-foreground">MJ/m²</span></p>
                             </div>
-
-                            <div className="rounded-lg border border-border p-4">
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                                <Users className="h-4 w-4" />
-                                População Estimada
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4 text-blue-500" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Pop. Estimada</p>
+                                <p className="font-medium">{sectors[index].population || 0} pessoas</p>
                               </div>
-                              <p className="text-2xl font-bold">{sectors[index]?.population || 0} <span className="text-sm font-normal text-muted-foreground">pessoas</span></p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Info className="h-4 w-4 text-primary" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Divisão</p>
+                                <p className="font-medium">{sectors[index].occupancyCode}</p>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -424,37 +428,35 @@ export function ClassificationStep({ form }: ClassificationStepProps) {
       {riskSummary && (
         <Card className={cn(
           "border-2",
-          riskSummary.riskClass === 'baixo' && "border-emerald-500/50 bg-emerald-500/5",
-          riskSummary.riskClass === 'medio' && "border-amber-500/50 bg-amber-500/5",
-          riskSummary.riskClass === 'alto' && "border-red-500/50 bg-red-500/5",
+          riskSummary.riskClass === 'baixo' && "border-emerald-500/50",
+          riskSummary.riskClass === 'medio' && "border-amber-500/50",
+          riskSummary.riskClass === 'alto' && "border-red-500/50",
         )}>
           <CardHeader>
             <CardTitle className="text-lg">Resumo da Classificação</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center">
-                <p className={cn(
-                  "text-3xl font-bold",
-                  riskSummary.riskClass === 'baixo' && "text-emerald-600",
-                  riskSummary.riskClass === 'medio' && "text-amber-600",
-                  riskSummary.riskClass === 'alto' && "text-red-600",
-                )}>
-                  {riskSummary.riskClass.charAt(0).toUpperCase() + riskSummary.riskClass.slice(1)}
-                </p>
-                <p className="text-sm text-muted-foreground">Risco</p>
+              <div>
+                <p className="text-sm text-muted-foreground">Carga Máxima</p>
+                <p className="text-xl font-bold">{riskSummary.maxFireLoad} MJ/m²</p>
               </div>
-              <div className="text-center">
-                <p className="text-3xl font-bold">{riskSummary.maxFireLoad}</p>
-                <p className="text-sm text-muted-foreground">MJ/m² máx.</p>
+              <div>
+                <p className="text-sm text-muted-foreground">Área Total</p>
+                <p className="text-xl font-bold">{riskSummary.totalArea.toLocaleString()} m²</p>
               </div>
-              <div className="text-center">
-                <p className="text-3xl font-bold">{riskSummary.totalArea.toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground">m² total</p>
+              <div>
+                <p className="text-sm text-muted-foreground">População Total</p>
+                <p className="text-xl font-bold">{riskSummary.totalPopulation} pessoas</p>
               </div>
-              <div className="text-center">
-                <p className="text-3xl font-bold">{riskSummary.totalPopulation}</p>
-                <p className="text-sm text-muted-foreground">pessoas</p>
+              <div>
+                <p className="text-sm text-muted-foreground">Classificação</p>
+                <Badge 
+                  variant={riskSummary.riskClass === 'baixo' ? 'secondary' : riskSummary.riskClass === 'medio' ? 'default' : 'destructive'}
+                  className="text-lg px-3 py-1"
+                >
+                  Risco {riskSummary.riskClass.charAt(0).toUpperCase() + riskSummary.riskClass.slice(1)}
+                </Badge>
               </div>
             </div>
           </CardContent>
@@ -468,17 +470,15 @@ export function ClassificationStep({ form }: ClassificationStepProps) {
 function getDefaultFireLoad(code: string): number {
   const fireLoadMap: Record<string, number> = {
     'A-1': 300, 'A-2': 300, 'A-3': 300,
-    'B-1': 300, 'B-2': 300,
-    'C-1': 200, 'C-2': 400, 'C-3': 800,
-    'D-1': 700, 'D-2': 300, 'D-3': 500, 'D-4': 200,
-    'E-1': 300, 'E-2': 300, 'E-3': 200, 'E-4': 300, 'E-5': 300, 'E-6': 300,
-    'F-1': 300, 'F-2': 200, 'F-3': 200, 'F-4': 200, 'F-5': 400, 'F-6': 300, 'F-7': 200, 'F-8': 200,
-    'G-1': 200, 'G-2': 200, 'G-3': 200, 'G-4': 300, 'G-5': 200,
-    'H-1': 200, 'H-2': 300, 'H-3': 300, 'H-4': 400, 'H-5': 300, 'H-6': 200,
-    'I-1': 200, 'I-2': 800, 'I-3': 1500,
-    'J-1': 50, 'J-2': 200, 'J-3': 800, 'J-4': 1500,
-    'L-1': 500, 'L-2': 1000, 'L-3': 1000,
-    'M-1': 200, 'M-3': 400, 'M-4': 200, 'M-5': 800, 'M-8': 200,
+    'B-1': 500, 'B-2': 500,
+    'C-1': 700, 'C-2': 800, 'C-3': 1000,
+    'D-1': 700, 'D-2': 300, 'D-3': 500, 'D-4': 700,
+    'E-1': 300, 'E-2': 300, 'E-3': 300, 'E-4': 300, 'E-5': 300, 'E-6': 300,
+    'F-1': 500, 'F-2': 300, 'F-3': 300, 'F-4': 300, 'F-5': 200, 'F-6': 300, 'F-7': 300, 'F-8': 200,
+    'G-1': 300, 'G-2': 200, 'G-3': 200, 'G-4': 200,
+    'H-1': 300, 'H-2': 300, 'H-3': 300, 'H-4': 300, 'H-5': 300, 'H-6': 200,
+    'I-1': 500, 'I-2': 1000, 'I-3': 2000,
+    'J-1': 500, 'J-2': 1000, 'J-3': 800, 'J-4': 1500,
   };
   return fireLoadMap[code] || 300;
 }
@@ -486,18 +486,16 @@ function getDefaultFireLoad(code: string): number {
 function getPopulationFactor(code: string): number {
   const group = code.charAt(0);
   const factorMap: Record<string, number> = {
-    'A': 15, // 1 pessoa por 15m² (residencial)
-    'B': 10, // 1 pessoa por 10m² (hospedagem)
-    'C': 3, // 1 pessoa por 3m² (comercial)
-    'D': 7, // 1 pessoa por 7m² (escritórios)
-    'E': 1.5, // 1 pessoa por 1.5m² (educacional)
-    'F': 1, // 1 pessoa por 1m² (reunião de público)
-    'G': 20, // 1 pessoa por 20m² (garagens)
-    'H': 7, // 1 pessoa por 7m² (saúde)
-    'I': 10, // 1 pessoa por 10m² (industrial)
-    'J': 30, // 1 pessoa por 30m² (depósitos)
-    'L': 30, // 1 pessoa por 30m² (explosivos)
-    'M': 20, // 1 pessoa por 20m² (especial)
+    'A': 15, // Residential - 1 person per 15 m²
+    'B': 10, // Hotel
+    'C': 5,  // Commercial
+    'D': 7,  // Services
+    'E': 1.5, // Education
+    'F': 1,  // Assembly
+    'G': 20, // Parking
+    'H': 7,  // Health
+    'I': 10, // Industrial
+    'J': 30, // Storage
   };
   return factorMap[group] || 10;
 }

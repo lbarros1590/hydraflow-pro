@@ -1,62 +1,33 @@
 /**
- * DocsPage - NTCB Documentation and Reference
+ * DocsPage - NTCB Documentation with State Filter
  */
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { BookOpen, FileText, Calculator, Droplets, Users, Building2, ExternalLink } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { BookOpen, FileText, Calculator, Droplets, Building2, ExternalLink, Globe, Info, Download } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
-const normasNTCB = [
-  {
-    code: 'NTCB 01',
-    title: 'Procedimentos Administrativos',
-    description: 'Procedimentos para aprovação de projetos de PSCIP',
-    category: 'Administrativo',
-  },
-  {
-    code: 'NTCB 08',
-    title: 'Saídas de Emergência',
-    description: 'Dimensionamento de rotas de fuga e saídas de emergência',
-    category: 'Arquitetônico',
-  },
-  {
-    code: 'NTCB 19',
-    title: 'Sistema de Hidrantes',
-    description: 'Projeto e instalação de sistemas de hidrantes e mangotinhos',
-    category: 'Hidráulico',
-  },
-  {
-    code: 'NTCB 20',
-    title: 'Chuveiros Automáticos',
-    description: 'Sistemas de sprinklers automáticos',
-    category: 'Hidráulico',
-  },
-  {
-    code: 'NTCB 22',
-    title: 'Extintores',
-    description: 'Proteção por extintores de incêndio',
-    category: 'Proteção',
-  },
-  {
-    code: 'NTCB 23',
-    title: 'Sinalização de Emergência',
-    description: 'Sinalização de segurança contra incêndio',
-    category: 'Sinalização',
-  },
-  {
-    code: 'NTCB 25',
-    title: 'Iluminação de Emergência',
-    description: 'Sistemas de iluminação de emergência',
-    category: 'Elétrico',
-  },
-  {
-    code: 'NTCB 27',
-    title: 'Alarme de Incêndio',
-    description: 'Sistemas de detecção e alarme de incêndio',
-    category: 'Eletrônico',
-  },
-];
+interface AvailableState {
+  code: string;
+  name: string;
+  is_active: boolean;
+  regulations_version: string | null;
+}
+
+interface Regulation {
+  id: string;
+  state_code: string;
+  code: string;
+  title: string;
+  description: string | null;
+  category: string | null;
+  file_url: string | null;
+  version: string | null;
+}
 
 const ocupacoes = [
   { divisao: 'A-1', descricao: 'Residencial unifamiliar', carga: 300, risco: 'Baixo' },
@@ -87,20 +58,95 @@ const reservatorios = [
 ];
 
 export default function DocsPage() {
+  const [states, setStates] = useState<AvailableState[]>([]);
+  const [selectedState, setSelectedState] = useState<string>('MT');
+  const [regulations, setRegulations] = useState<Regulation[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchStates() {
+      const { data, error } = await supabase
+        .from('available_states')
+        .select('*')
+        .order('name');
+      
+      if (!error && data) {
+        setStates(data);
+      }
+    }
+    fetchStates();
+  }, []);
+
+  useEffect(() => {
+    async function fetchRegulations() {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('state_regulations')
+        .select('*')
+        .eq('state_code', selectedState)
+        .order('code');
+      
+      if (!error && data) {
+        setRegulations(data);
+      }
+      setLoading(false);
+    }
+    fetchRegulations();
+  }, [selectedState]);
+
+  const currentState = states.find(s => s.code === selectedState);
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-3 rounded-lg bg-primary/10">
-          <BookOpen className="w-6 h-6 text-primary" />
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="p-3 rounded-lg bg-primary/10">
+            <BookOpen className="w-6 h-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Documentação Técnica</h1>
+            <p className="text-muted-foreground">
+              Normas Técnicas do Corpo de Bombeiros
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">Documentação NTCB</h1>
-          <p className="text-muted-foreground">
-            Normas Técnicas do Corpo de Bombeiros de Mato Grosso
-          </p>
+
+        {/* State Selector */}
+        <div className="flex items-center gap-3">
+          <Globe className="h-5 w-5 text-muted-foreground" />
+          <Select value={selectedState} onValueChange={setSelectedState}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Selecione o estado" />
+            </SelectTrigger>
+            <SelectContent>
+              {states.map((state) => (
+                <SelectItem key={state.code} value={state.code}>
+                  <div className="flex items-center gap-2">
+                    <span>{state.name}</span>
+                    {state.is_active ? (
+                      <Badge variant="default" className="text-xs">Ativo</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-xs">Em breve</Badge>
+                    )}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
+
+      {/* State Status Alert */}
+      {currentState && !currentState.is_active && (
+        <Alert className="border-amber-500/50 bg-amber-500/5">
+          <Info className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-amber-700">
+            As normas de <strong>{currentState.name}</strong> ainda não estão totalmente cadastradas. 
+            Algumas informações podem estar baseadas nas normas de Mato Grosso (NTCB).
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Tabs defaultValue="normas" className="space-y-6">
         <TabsList className="grid w-full grid-cols-4">
@@ -122,22 +168,60 @@ export default function DocsPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Normas Tab */}
+        {/* Normas Tab - Dynamic from Database */}
         <TabsContent value="normas">
-          <div className="grid gap-4 md:grid-cols-2">
-            {normasNTCB.map((norma) => (
-              <Card key={norma.code} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="outline">{norma.code}</Badge>
-                    <Badge variant="secondary">{norma.category}</Badge>
-                  </div>
-                  <CardTitle className="text-lg">{norma.title}</CardTitle>
-                  <CardDescription>{norma.description}</CardDescription>
-                </CardHeader>
-              </Card>
-            ))}
-          </div>
+          {loading ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              {[1, 2, 3, 4].map(i => (
+                <Card key={i} className="animate-pulse">
+                  <CardHeader className="pb-3">
+                    <div className="h-4 bg-muted rounded w-1/4 mb-2" />
+                    <div className="h-6 bg-muted rounded w-3/4" />
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+          ) : regulations.length > 0 ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              {regulations.map((norma) => (
+                <Card key={norma.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="outline">{norma.code}</Badge>
+                      {norma.category && (
+                        <Badge variant="secondary">{norma.category}</Badge>
+                      )}
+                    </div>
+                    <CardTitle className="text-lg">{norma.title}</CardTitle>
+                    <CardDescription>{norma.description}</CardDescription>
+                  </CardHeader>
+                  {norma.file_url && (
+                    <CardContent className="pt-0">
+                      <a 
+                        href={norma.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                      >
+                        <Download className="h-4 w-4" />
+                        Baixar PDF
+                      </a>
+                    </CardContent>
+                  )}
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="border-dashed">
+              <CardContent className="py-12 text-center">
+                <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium mb-2">Nenhuma norma cadastrada</h3>
+                <p className="text-muted-foreground">
+                  As normas de {currentState?.name || selectedState} ainda não foram adicionadas ao sistema.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="mt-6">
             <CardHeader>

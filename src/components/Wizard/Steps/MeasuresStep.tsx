@@ -1,7 +1,7 @@
 /**
- * Step 4 - Mandatory Measures Checklist
+ * Step 4 - Mandatory & Voluntary Measures Checklist
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { ProjectFormData, ALL_MEASURES } from '../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,7 @@ import { FormField, FormItem, FormControl, FormLabel, FormDescription } from '@/
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { 
   ClipboardCheck, 
   Shield, 
@@ -16,6 +17,8 @@ import {
   CheckCircle2,
   XCircle,
   Info,
+  Plus,
+  Heart,
   FireExtinguisher,
   SignpostBig,
   Lightbulb,
@@ -46,6 +49,7 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
   const totalHeight = form.watch('totalHeight') || 0;
   const specialRisks = form.watch('specialRisks') || [];
   const exemptMeasures = form.watch('exemptMeasures') || [];
+  const voluntaryMeasures = form.watch('voluntaryMeasures') || [];
 
   // Calculate mandatory measures based on project data
   const analysis = useMemo(() => {
@@ -105,6 +109,20 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
     }
   };
 
+  const handleVoluntaryToggle = (measureId: string, isVoluntary: boolean) => {
+    const current = form.getValues('voluntaryMeasures') || [];
+    if (isVoluntary) {
+      form.setValue('voluntaryMeasures', [...current, measureId]);
+    } else {
+      form.setValue('voluntaryMeasures', current.filter(id => id !== measureId));
+    }
+  };
+
+  // Get non-mandatory measures that can be added voluntarily
+  const availableVoluntaryMeasures = ALL_MEASURES.filter(
+    m => !analysis.mandatory.includes(m.id)
+  );
+
   return (
     <div className="space-y-6 pb-24">
       {/* Summary Alert */}
@@ -130,6 +148,7 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
         </AlertDescription>
       </Alert>
 
+      {/* Mandatory Measures Card */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -146,6 +165,10 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
               const Icon = ICONS[measure.icon] || Shield;
               const isMandatory = analysis.mandatory.includes(measure.id);
               const isExempt = exemptMeasures.includes(measure.id);
+              const isVoluntary = voluntaryMeasures.includes(measure.id);
+              
+              // Only show mandatory and voluntary measures in this section
+              if (!isMandatory && !isVoluntary) return null;
               
               return (
                 <div
@@ -154,6 +177,8 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
                     "flex items-start space-x-3 rounded-lg border p-4 transition-all",
                     isMandatory && !isExempt 
                       ? "border-primary/50 bg-primary/5" 
+                      : isVoluntary
+                      ? "border-blue-500/50 bg-blue-500/5"
                       : "border-border bg-muted/30",
                     isExempt && "opacity-50"
                   )}
@@ -162,6 +187,8 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
                     "rounded-full p-2",
                     isMandatory && !isExempt 
                       ? "bg-primary/10 text-primary" 
+                      : isVoluntary
+                      ? "bg-blue-500/10 text-blue-500"
                       : "bg-muted text-muted-foreground"
                   )}>
                     <Icon className="h-5 w-5" />
@@ -176,9 +203,10 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
                           Obrigatório
                         </Badge>
                       )}
-                      {!isMandatory && (
-                        <Badge variant="outline" className="text-xs text-muted-foreground">
-                          Não exigido
+                      {isVoluntary && (
+                        <Badge variant="secondary" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/30">
+                          <Heart className="h-3 w-3 mr-1" />
+                          Voluntário
                         </Badge>
                       )}
                       {isExempt && (
@@ -204,8 +232,68 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
                         </label>
                       </div>
                     )}
+
+                    {isVoluntary && (
+                      <div className="flex items-center space-x-2 pt-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleVoluntaryToggle(measure.id, false)}
+                          className="text-xs text-destructive hover:text-destructive"
+                        >
+                          <XCircle className="h-3 w-3 mr-1" />
+                          Remover
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Voluntary Measures Card */}
+      <Card className="border-dashed">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Heart className="h-5 w-5 text-blue-500" />
+            Adicionar Medidas Voluntárias
+          </CardTitle>
+          <CardDescription>
+            Adicione medidas que não são obrigatórias, mas o cliente deseja incluir no projeto
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {availableVoluntaryMeasures.map((measure) => {
+              const Icon = ICONS[measure.icon] || Shield;
+              const isVoluntary = voluntaryMeasures.includes(measure.id);
+              
+              if (isVoluntary) return null; // Already added, shown above
+              
+              return (
+                <button
+                  key={measure.id}
+                  type="button"
+                  onClick={() => handleVoluntaryToggle(measure.id, true)}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg border border-dashed p-3",
+                    "hover:border-blue-500/50 hover:bg-blue-500/5 transition-all",
+                    "text-left"
+                  )}
+                >
+                  <div className="rounded-full p-2 bg-muted text-muted-foreground">
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{measure.label}</p>
+                    <p className="text-xs text-muted-foreground">Clique para adicionar</p>
+                  </div>
+                  <Plus className="h-4 w-4 text-muted-foreground" />
+                </button>
               );
             })}
           </div>
@@ -221,6 +309,20 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
             <br />
             <span className="text-sm">
               Certifique-se de documentar a justificativa técnica para cada isenção no memorial descritivo.
+            </span>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Voluntary Summary */}
+      {voluntaryMeasures.length > 0 && (
+        <Alert className="border-blue-500/50 bg-blue-500/5">
+          <Heart className="h-5 w-5 text-blue-600" />
+          <AlertDescription className="ml-2 text-blue-700">
+            <strong>{voluntaryMeasures.length} medida(s) voluntária(s) adicionada(s).</strong>
+            <br />
+            <span className="text-sm">
+              Estas medidas serão incluídas no projeto por solicitação do cliente.
             </span>
           </AlertDescription>
         </Alert>

@@ -16,8 +16,8 @@ export const specialRisks = [
 export const sectorSchema = z.object({
   id: z.string(),
   name: z.string().min(1, 'Nome do setor é obrigatório'),
-  area: z.number().min(1, 'Área deve ser maior que 0'),
-  occupancyCode: z.string().min(1, 'Selecione uma ocupação'),
+  area: z.number().min(0, 'Área deve ser maior ou igual a 0'),
+  occupancyCode: z.string().optional(),
   occupancyName: z.string().optional(),
   cnaeCode: z.string().optional(),
   fireLoad: z.number().min(0).optional(),
@@ -36,6 +36,7 @@ export const projectFormSchema = z.object({
   address: z.string().min(1, 'Endereço é obrigatório'),
   city: z.string().min(1, 'Cidade é obrigatória'),
   state: z.string().default('MT'),
+  stateCode: z.string().default('MT'), // For multi-state support
   processType: z.enum(['pscip', 'simplificado', 'evento']),
   
   // Step 2 - Geometry & Risk
@@ -45,11 +46,12 @@ export const projectFormSchema = z.object({
   specialRisks: z.array(z.string()).default([]),
   
   // Step 3 - Sectors/Occupations
-  sectors: z.array(sectorSchema).min(1, 'Adicione pelo menos um setor'),
+  sectors: z.array(sectorSchema).default([]),
   
   // Step 4 - Measures (filled by system + user overrides)
   mandatoryMeasures: z.array(z.string()).optional(),
   exemptMeasures: z.array(z.string()).optional(),
+  voluntaryMeasures: z.array(z.string()).optional(), // User-selected non-mandatory measures
 });
 
 export type SectorFormData = z.infer<typeof sectorSchema>;
