@@ -28,8 +28,8 @@ import {
   FolderOpen,
 } from 'lucide-react';
 import type { ProjectFormData, ProjectStatus } from '@/components/Wizard/types';
-import FileManager from '@/components/ProjectFiles/FileManager';
-import ShareProjectDialog from '@/components/Sharing/ShareProjectDialog';
+import { FileManager } from '@/components/ProjectFiles/FileManager';
+import { ShareProjectDialog } from '@/components/Sharing/ShareProjectDialog';
 
 interface Project {
   id: string;
@@ -60,7 +60,6 @@ export default function ProjectDetail() {
   const { user } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
 
   useEffect(() => {
     if (id) fetchProject();
@@ -135,9 +134,15 @@ export default function ProjectDetail() {
         </div>
         <div className="flex gap-2">
           {isOwner && (
-            <Button variant="outline" size="icon" onClick={() => setShareDialogOpen(true)}>
-              <Share2 className="w-4 h-4" />
-            </Button>
+            <ShareProjectDialog 
+              projectId={id!} 
+              projectName={data.projectName}
+              trigger={
+                <Button variant="outline" size="icon">
+                  <Share2 className="w-4 h-4" />
+                </Button>
+              }
+            />
           )}
           <Button variant="outline" onClick={() => navigate(`/app/projects/${id}/edit`)} className="gap-2">
             <Pencil className="w-4 h-4" />
@@ -341,15 +346,6 @@ export default function ProjectDetail() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Share Dialog */}
-      {isOwner && (
-        <ShareProjectDialog 
-          projectId={id!} 
-          open={shareDialogOpen} 
-          onOpenChange={setShareDialogOpen} 
-        />
-      )}
     </div>
   );
 }
