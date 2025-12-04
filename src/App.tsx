@@ -18,6 +18,7 @@ import StandaloneCalculator from "./pages/StandaloneCalculator";
 import SprinklerCalculator from "./pages/SprinklerCalculator";
 import DocsPage from "./pages/DocsPage";
 import AssistantPage from "./pages/AssistantPage";
+import RegulationsAdmin from "./pages/admin/RegulationsAdmin";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -54,6 +55,7 @@ const App = () => (
               <Route path="calculator/sprinkler" element={<SprinklerCalculator />} />
               <Route path="docs" element={<DocsPage />} />
               <Route path="assistant" element={<AssistantPage />} />
+              <Route path="admin/regulations" element={<RegulationsAdmin />} />
             </Route>
 
             {/* Catch-all */}
