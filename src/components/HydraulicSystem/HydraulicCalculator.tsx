@@ -81,6 +81,13 @@ interface NetworkData {
   }>;
 }
 
+interface LoadedCalculation {
+  network_data: any;
+  results: any;
+  accessories: any;
+  connections: any;
+}
+
 interface HydraulicCalculatorProps {
   initialConfig?: {
     occupancyCode: string;
@@ -88,11 +95,20 @@ interface HydraulicCalculatorProps {
     totalAreaM2: number;
     buildingHeight: number;
   };
+  projectId?: string;
+  onSaveToProject?: (data: {
+    network_data: any;
+    results: any;
+    accessories: any;
+    connections: any;
+  }) => Promise<void>;
+  loadedCalculation?: LoadedCalculation | null;
 }
 
-export function HydraulicCalculator({ initialConfig }: HydraulicCalculatorProps = {}) {
+export function HydraulicCalculator({ initialConfig, projectId, onSaveToProject, loadedCalculation }: HydraulicCalculatorProps = {}) {
   const [nodes, setNodes] = useState<Node[]>(DEMO_NODES);
   const [pipes, setPipes] = useState<Pipe[]>(DEMO_PIPES);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Parâmetros NTCB 19/2020
   const [occupancyCode, setOccupancyCode] = useState(initialConfig?.occupancyCode || 'A-2');
@@ -116,6 +132,65 @@ export function HydraulicCalculator({ initialConfig }: HydraulicCalculatorProps 
       setBuildingHeight(initialConfig.buildingHeight);
     }
   }, [initialConfig]);
+
+  // Load saved calculation
+  useEffect(() => {
+    if (loadedCalculation?.network_data) {
+      const data = loadedCalculation.network_data;
+      if (data.config) {
+        setOccupancyCode(data.config.occupancyCode || 'A-2');
+        setFireLoadMJm2(data.config.fireLoadMJm2 || 300);
+        setTotalAreaM2(data.config.totalAreaM2 || 1500);
+        setBuildingHeight(data.config.buildingHeight || 15);
+        setPumpEfficiency(data.config.pumpEfficiency || 0.65);
+      }
+      if (data.nodes) {
+        const loadedNodes: Node[] = data.nodes.map((n: any) => ({
+          id: n.id,
+          type: n.type as Node['type'],
+          name: n.name,
+          elevation: n.elevation
+        }));
+        setNodes(loadedNodes);
+      }
+      if (data.pipes) {
+        const loadedPipes: Pipe[] = data.pipes.map((p: any) => {
+          const diamMm = p.diameterMm;
+          const mat = (p.material || 'PVC') as 'PVC' | 'Metal';
+          const accessories = (p.accessories || []).map((a: any) => {
+            const leqUnit = getEquivalentLength(a.type as any, diamMm, mat);
+            return {
+              type: a.type as any,
+              quantity: a.quantity,
+              equivalentLengthUnit: leqUnit,
+              equivalentLengthTotal: leqUnit * a.quantity
+            };
+          });
+          const totalLeq = accessories.reduce((sum: number, a: any) => sum + a.equivalentLengthTotal, 0);
+          return {
+            id: p.id,
+            name: p.name,
+            startNodeId: p.startNodeId,
+            endNodeId: p.endNodeId,
+            length: p.length,
+            diameter: mm_to_m(diamMm),
+            roughness: getHazenWilliamsC(p.material || 'PVC'),
+            material: p.material || 'PVC',
+            accessories,
+            equivalentLength: totalLeq
+          };
+        });
+        setPipes(loadedPipes);
+      }
+      if (loadedCalculation.results) {
+        setResult(loadedCalculation.results);
+      }
+      toast({
+        title: 'Cálculo carregado',
+        description: 'Dados restaurados do cálculo salvo.',
+      });
+    }
+  }, [loadedCalculation]);
 
   const handleCalculate = useCallback(() => {
     if (nodes.length < 2) {
@@ -386,6 +461,64 @@ export function HydraulicCalculator({ initialConfig }: HydraulicCalculatorProps 
     }
   };
 
+  // Save to project database
+  const handleSaveToProject = async () => {
+    if (!onSaveToProject) return;
+
+    setIsSaving(true);
+    try {
+      const networkData: NetworkData = {
+        version: '1.0',
+        projectName: 'Cálculo Hidráulico',
+        createdAt: new Date().toISOString(),
+        config: {
+          occupancyCode,
+          fireLoadMJm2,
+          totalAreaM2,
+          buildingHeight,
+          pumpEfficiency
+        },
+        nodes: nodes.map(n => ({
+          id: n.id,
+          type: n.type,
+          name: n.name,
+          elevation: n.elevation
+        })),
+        pipes: pipes.map(p => ({
+          id: p.id,
+          name: p.name,
+          startNodeId: p.startNodeId,
+          endNodeId: p.endNodeId,
+          length: p.length,
+          diameterMm: m_to_mm(p.diameter),
+          material: p.material || 'PVC',
+          accessories: (p.accessories || []).map(a => ({ type: a.type, quantity: a.quantity }))
+        }))
+      };
+
+      await onSaveToProject({
+        network_data: networkData,
+        results: result,
+        accessories: pipes.flatMap(p => p.accessories || []),
+        connections: pipes.map(p => ({ from: p.startNodeId, to: p.endNodeId })),
+      });
+
+      toast({
+        title: 'Salvo no projeto',
+        description: 'Cálculo armazenado com sucesso.',
+      });
+    } catch (error) {
+      console.error('Save to project error:', error);
+      toast({
+        title: 'Erro ao salvar',
+        description: error instanceof Error ? error.message : 'Erro desconhecido',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background engineering-grid">
       {/* Hidden file input for loading JSON */}
@@ -448,6 +581,17 @@ export function HydraulicCalculator({ initialConfig }: HydraulicCalculatorProps 
                 <FileText className="h-4 w-4 mr-2" />
                 Word
               </Button>
+              {onSaveToProject && (
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={handleSaveToProject}
+                  disabled={isSaving}
+                >
+                  <Building2 className="h-4 w-4 mr-2" />
+                  {isSaving ? 'Salvando...' : 'Salvar no Projeto'}
+                </Button>
+              )}
               <Button onClick={handleCalculate} disabled={isCalculating}>
                 <Calculator className="h-4 w-4 mr-2" />
                 {isCalculating ? 'Calculando...' : 'Calcular'}

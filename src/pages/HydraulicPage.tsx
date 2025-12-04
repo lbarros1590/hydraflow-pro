@@ -1,15 +1,16 @@
 /**
  * Hydraulic Page - Calculator with project context
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import HydraulicCalculator from '@/components/HydraulicSystem/HydraulicCalculator';
+import { SavedCalculations } from '@/components/HydraulicSystem/SavedCalculations';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Building2, FileEdit, Flame } from 'lucide-react';
+import { ArrowLeft, Building2, FileEdit, Flame, History } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import type { ProjectFormData, ProjectStatus } from '@/components/Wizard/types';
 
 interface Project {
@@ -25,6 +34,20 @@ interface Project {
   data: ProjectFormData;
   status: ProjectStatus;
   risk_class: string;
+}
+
+interface HydraulicCalculation {
+  id: string;
+  project_id: string;
+  name: string;
+  version: number;
+  is_active: boolean;
+  network_data: any;
+  results: any;
+  accessories: any;
+  connections: any;
+  report_data: any;
+  created_at: string;
 }
 
 function extractHydraulicConfig(project: Project) {
@@ -54,6 +77,8 @@ export default function HydraulicPage() {
   const [loading, setLoading] = useState(true);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [hydraulicConfig, setHydraulicConfig] = useState<ReturnType<typeof extractHydraulicConfig> | null>(null);
+  const [loadedCalculation, setLoadedCalculation] = useState<HydraulicCalculation | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     if (id) fetchProject();
@@ -85,6 +110,58 @@ export default function HydraulicPage() {
       setLoading(false);
     }
   };
+
+  const handleSaveToProject = useCallback(async (data: {
+    network_data: any;
+    results: any;
+    accessories: any;
+    connections: any;
+  }) => {
+    if (!id) return;
+
+    // Get current version count
+    const { data: existing } = await supabase
+      .from('hydraulic_calculations')
+      .select('version')
+      .eq('project_id', id)
+      .order('version', { ascending: false })
+      .limit(1);
+
+    const nextVersion = (existing?.[0]?.version || 0) + 1;
+
+    // Deactivate all previous calculations
+    await supabase
+      .from('hydraulic_calculations')
+      .update({ is_active: false })
+      .eq('project_id', id);
+
+    // Insert new calculation
+    const { error } = await supabase
+      .from('hydraulic_calculations')
+      .insert({
+        project_id: id,
+        name: `Cálculo v${nextVersion}`,
+        version: nextVersion,
+        is_active: true,
+        network_data: data.network_data,
+        results: data.results,
+        accessories: data.accessories,
+        connections: data.connections,
+      });
+
+    if (error) throw error;
+
+    // Refresh saved calculations list
+    setRefreshKey(prev => prev + 1);
+  }, [id]);
+
+  const handleLoadCalculation = useCallback((calc: HydraulicCalculation) => {
+    setLoadedCalculation(calc);
+    toast({
+      title: 'Carregando...',
+      description: `Restaurando "${calc.name}"`,
+    });
+  }, [toast]);
 
   if (loading) {
     return (
@@ -124,19 +201,49 @@ export default function HydraulicPage() {
               </div>
             </div>
             
-            <Link to={`/app/projects/${project.id}/edit`}>
-              <Button variant="outline" size="sm" className="gap-2">
-                <FileEdit className="h-4 w-4" />
-                Editar Projeto
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <History className="h-4 w-4" />
+                    Cálculos Salvos
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="w-[400px] sm:w-[540px]">
+                  <SheetHeader>
+                    <SheetTitle>Histórico de Cálculos</SheetTitle>
+                    <SheetDescription>
+                      Cálculos salvos neste projeto
+                    </SheetDescription>
+                  </SheetHeader>
+                  <div className="mt-6">
+                    <SavedCalculations 
+                      key={refreshKey}
+                      projectId={id!} 
+                      onLoad={handleLoadCalculation} 
+                    />
+                  </div>
+                </SheetContent>
+              </Sheet>
+              <Link to={`/app/projects/${project.id}/edit`}>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <FileEdit className="h-4 w-4" />
+                  Editar Projeto
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Calculator */}
       <div className="p-4">
-        <HydraulicCalculator initialConfig={hydraulicConfig || undefined} />
+        <HydraulicCalculator 
+          initialConfig={hydraulicConfig || undefined}
+          projectId={id}
+          onSaveToProject={handleSaveToProject}
+          loadedCalculation={loadedCalculation}
+        />
       </div>
 
       {/* Import Dialog */}
