@@ -1,6 +1,6 @@
 /**
  * Calculadora Hidráulica Principal - NTCB 19/2020
- * Componente orquestrador do sistema
+ * Corpo de Bombeiros Militar do Estado de Mato Grosso
  */
 
 import { useState, useCallback } from 'react';
@@ -12,11 +12,11 @@ import { BuildingConfig } from './BuildingConfig';
 import { ResultsPanel } from './ResultsPanel';
 import { NetworkVisualization } from './NetworkVisualization';
 import { calculateSystem } from '@/engine/calculateSystem';
-import type { Node, Pipe, SystemResult, PipeMaterial } from '@/models/types';
+import type { Node, Pipe, SystemResult } from '@/models/types';
 import { mm_to_m } from '@/core/units';
 import { getHazenWilliamsC } from '@/core/equivalentLength';
 
-// Example data for demo
+// Dados de exemplo para demonstração
 const DEMO_NODES: Node[] = [
   { id: 'N1', type: 'source', name: 'Reservatório', elevation: 0 },
   { id: 'N2', type: 'junction', name: 'Derivação 1', elevation: 3 },
@@ -38,7 +38,7 @@ export function HydraulicCalculator() {
   const [nodes, setNodes] = useState<Node[]>(DEMO_NODES);
   const [pipes, setPipes] = useState<Pipe[]>(DEMO_PIPES);
   
-  // NTCB 19/2020 parameters
+  // Parâmetros NTCB 19/2020
   const [occupancyCode, setOccupancyCode] = useState('A-2');
   const [fireLoadMJm2, setFireLoadMJm2] = useState(300);
   const [totalAreaM2, setTotalAreaM2] = useState(1500);
@@ -91,7 +91,6 @@ export function HydraulicCalculator() {
     setIsCalculating(true);
     setResult(null);
 
-    // Simulate async calculation
     setTimeout(() => {
       try {
         const calcResult = calculateSystem({
@@ -180,7 +179,7 @@ export function HydraulicCalculator() {
                 </span>
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Sistema Hidráulico para Dimensionamento de Hidrantes - Norma CBMGO
+                Sistema Hidráulico para Dimensionamento de Hidrantes - CBMMT (Mato Grosso)
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -251,7 +250,7 @@ export function HydraulicCalculator() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>
-              Cálculos baseados em Hazen-Williams | Norma: NTCB 19/2020 - CBMGO
+              Cálculos baseados em Hazen-Williams | Norma: NTCB 19/2020 - CBMMT
             </span>
             <span className="font-mono">
               Sistema de dimensionamento profissional
@@ -263,18 +262,18 @@ export function HydraulicCalculator() {
   );
 }
 
-// Helper function to generate text report
+// Função auxiliar para gerar relatório em texto
 function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]): string {
   const lines: string[] = [];
   const sep = '='.repeat(70);
   
   lines.push(sep);
   lines.push('RELATÓRIO DE DIMENSIONAMENTO HIDRÁULICO - NTCB 19/2020');
-  lines.push('Sistema de Hidrantes / HCI - Corpo de Bombeiros GO');
+  lines.push('Sistema de Hidrantes / HCI - Corpo de Bombeiros MT');
   lines.push(sep);
   lines.push('');
   
-  // Classification
+  // Classificação
   lines.push('1. ENQUADRAMENTO NORMATIVO');
   lines.push('-'.repeat(50));
   lines.push(`Tipo de Sistema: ${result.config.ntcbSystemType || 'N/A'}`);
@@ -284,7 +283,7 @@ function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]):
   lines.push(`Mangueira Máx.: ${result.config.demandConfig.hoseLength} m`);
   lines.push('');
   
-  // Pump
+  // Bomba
   lines.push('2. BOMBA DE INCÊNDIO');
   lines.push('-'.repeat(50));
   lines.push(`Altura Manométrica: ${result.pump.minPressure.toFixed(2)} mca`);
@@ -295,13 +294,13 @@ function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]):
   lines.push(`Rendimento: ${(result.pump.efficiency * 100).toFixed(0)}%`);
   lines.push('');
   
-  // Reserve
+  // Reserva
   lines.push('3. RESERVA TÉCNICA DE INCÊNDIO (RTI)');
   lines.push('-'.repeat(50));
   lines.push(`Volume: ${result.reserve.volumeM3.toFixed(1)} m³ (${result.reserve.volumeLiters.toLocaleString()} L)`);
   lines.push('');
   
-  // Hydrants
+  // Hidrantes
   lines.push('4. ANÁLISE DE HIDRANTES');
   lines.push('-'.repeat(50));
   lines.push('Hidrantes Ativos (mais desfavoráveis):');
@@ -315,7 +314,7 @@ function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]):
   }
   lines.push('');
   
-  // Pipes
+  // Trechos
   lines.push('5. MEMORIAL DE CÁLCULO - TRECHOS');
   lines.push('-'.repeat(50));
   lines.push('Trecho  | Q(L/min) | V(m/s) | J(m/m)  | Leq(m) | ΔH(mca) | Pi(mca) | Pf(mca)');
@@ -348,7 +347,7 @@ function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]):
   lines.push('');
   lines.push(sep);
   lines.push(`Relatório gerado em: ${new Date().toLocaleString('pt-BR')}`);
-  lines.push('Norma de referência: NTCB 19/2020 - CBMGO');
+  lines.push('Norma de referência: NTCB 19/2020 - CBMMT (Mato Grosso)');
   lines.push(sep);
   
   return lines.join('\n');
