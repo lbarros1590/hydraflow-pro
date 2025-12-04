@@ -211,14 +211,14 @@ export function NetworkVisualization({ nodes, pipes, result }: NetworkVisualizat
                   >
                     {NODE_LABELS[node.type]}
                   </text>
-                  {/* Node label */}
+                  {/* Node label - Show name */}
                   <text
                     x={pos.x}
                     y={pos.y - 18}
                     textAnchor="middle"
                     className="fill-foreground text-[10px] font-mono font-semibold"
                   >
-                    {node.id}
+                    {node.name || node.id}
                   </text>
                   {/* Pressure */}
                   {pressure !== null && (
