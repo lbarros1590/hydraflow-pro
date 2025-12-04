@@ -201,9 +201,32 @@ export default function ProjectWizard() {
   const handleFinish = async () => {
     const isValid = await form.trigger();
     if (!isValid) {
+      const errors = form.formState.errors;
+      console.log('Form validation errors:', errors);
+      
+      // Find which fields are failing
+      const errorFields = Object.keys(errors);
+      let errorMessage = 'Preencha todos os campos obrigatórios.';
+      
+      if (errorFields.length > 0) {
+        const fieldLabels: Record<string, string> = {
+          projectName: 'Nome do projeto',
+          owner: 'Proprietário',
+          technicalResponsible: 'Responsável técnico',
+          address: 'Endereço',
+          city: 'Cidade',
+          totalArea: 'Área total',
+          totalHeight: 'Altura',
+          numberOfFloors: 'Pavimentos',
+          sectors: 'Setores',
+        };
+        const failedFields = errorFields.map(f => fieldLabels[f] || f).join(', ');
+        errorMessage = `Campos com erro: ${failedFields}`;
+      }
+      
       toast({
         title: 'Formulário incompleto',
-        description: 'Preencha todos os campos obrigatórios.',
+        description: errorMessage,
         variant: 'destructive',
       });
       return;
