@@ -4,8 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ProjectProvider } from "./contexts/ProjectContext";
-import Index from "./pages/Index";
-import ProjectPage from "./pages/ProjectPage";
+import Dashboard from "./pages/Dashboard";
+import ProjectWizard from "./pages/ProjectWizard";
+import HydraulicPage from "./pages/HydraulicPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -18,8 +19,9 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/projeto" element={<ProjectPage />} />
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/wizard/:id" element={<ProjectWizard />} />
+            <Route path="/project/:id/hydraulic" element={<HydraulicPage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
