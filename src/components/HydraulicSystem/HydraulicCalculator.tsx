@@ -22,7 +22,7 @@ import type { Node, Pipe, SystemResult } from '@/models/types';
 import { mm_to_m, m_to_mm } from '@/core/units';
 import { getHazenWilliamsC, getEquivalentLength, ACCESSORY_TYPES } from '@/core/equivalentLength';
 import { generateWordReport } from '@/utils/wordExport';
-import { useProject, extractHydraulicConfig } from '@/contexts/ProjectContext';
+// Project config is now passed as props
 import {
   Dialog,
   DialogContent,
@@ -650,3 +650,5 @@ function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]):
   
   return lines.join('\n');
 }
+
+export default HydraulicCalculator;
