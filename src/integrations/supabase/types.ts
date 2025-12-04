@@ -14,16 +14,169 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      available_states: {
+        Row: {
+          code: string
+          is_active: boolean | null
+          name: string
+          regulations_version: string | null
+        }
+        Insert: {
+          code: string
+          is_active?: boolean | null
+          name: string
+          regulations_version?: string | null
+        }
+        Update: {
+          code?: string
+          is_active?: boolean | null
+          name?: string
+          regulations_version?: string | null
+        }
+        Relationships: []
+      }
+      hydraulic_calculations: {
+        Row: {
+          created_at: string | null
+          id: string
+          network_data: Json | null
+          project_id: string
+          results: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          network_data?: Json | null
+          project_id: string
+          results?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          network_data?: Json | null
+          project_id?: string
+          results?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hydraulic_calculations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          company: string | null
+          crea_number: string | null
+          created_at: string | null
+          full_name: string | null
+          id: string
+          phone: string | null
+          preferred_state: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          company?: string | null
+          crea_number?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id: string
+          phone?: string | null
+          preferred_state?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          company?: string | null
+          crea_number?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          preferred_state?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          created_at: string | null
+          data: Json
+          id: string
+          risk_class: string
+          state_code: string
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          data?: Json
+          id?: string
+          risk_class?: string
+          state_code?: string
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          data?: Json
+          id?: string
+          risk_class?: string
+          state_code?: string
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_state_code_fkey"
+            columns: ["state_code"]
+            isOneToOne: false
+            referencedRelation: "available_states"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +303,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
