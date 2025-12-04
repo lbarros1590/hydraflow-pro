@@ -11,7 +11,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Calculator, RotateCcw, Download, Upload, Save } from 'lucide-react';
+import { Calculator, RotateCcw, Download, Upload, Save, FileText } from 'lucide-react';
 import { NetworkEditor } from './NetworkEditor';
 import { BuildingConfig } from './BuildingConfig';
 import { ResultsPanel } from './ResultsPanel';
@@ -19,7 +19,8 @@ import { NetworkVisualization } from './NetworkVisualization';
 import { calculateSystem } from '@/engine/calculateSystem';
 import type { Node, Pipe, SystemResult } from '@/models/types';
 import { mm_to_m, m_to_mm } from '@/core/units';
-import { getHazenWilliamsC } from '@/core/equivalentLength';
+import { getHazenWilliamsC, getEquivalentLength, ACCESSORY_TYPES } from '@/core/equivalentLength';
+import { generateWordReport } from '@/utils/wordExport';
 
 // Dados de exemplo para demonstração
 const DEMO_NODES: Node[] = [
@@ -251,24 +252,38 @@ export function HydraulicCalculator() {
           elevation: n.elevation
         }));
 
-        // Converte pipes
-        const loadedPipes: Pipe[] = data.pipes.map(p => ({
-          id: p.id,
-          name: p.name,
-          startNodeId: p.startNodeId,
-          endNodeId: p.endNodeId,
-          length: p.length,
-          diameter: mm_to_m(p.diameterMm),
-          roughness: getHazenWilliamsC(p.material || 'PVC'),
-          material: p.material || 'PVC',
-          accessories: (p.accessories || []).map(a => ({
-            type: a.type as any,
-            quantity: a.quantity,
-            equivalentLengthUnit: 0,
-            equivalentLengthTotal: 0
-          })),
-          equivalentLength: 0
-        }));
+        // Converte pipes com recálculo de Leq
+        const loadedPipes: Pipe[] = data.pipes.map(p => {
+          const diamMm = p.diameterMm;
+          const mat = (p.material || 'PVC') as 'PVC' | 'Metal';
+          
+          // Recalcula Leq para cada acessório
+          const accessories = (p.accessories || []).map(a => {
+            const leqUnit = getEquivalentLength(a.type as any, diamMm, mat);
+            return {
+              type: a.type as any,
+              quantity: a.quantity,
+              equivalentLengthUnit: leqUnit,
+              equivalentLengthTotal: leqUnit * a.quantity
+            };
+          });
+          
+          // Soma Leq total do trecho
+          const totalLeq = accessories.reduce((sum, a) => sum + a.equivalentLengthTotal, 0);
+          
+          return {
+            id: p.id,
+            name: p.name,
+            startNodeId: p.startNodeId,
+            endNodeId: p.endNodeId,
+            length: p.length,
+            diameter: mm_to_m(diamMm),
+            roughness: getHazenWilliamsC(p.material || 'PVC'),
+            material: p.material || 'PVC',
+            accessories,
+            equivalentLength: totalLeq
+          };
+        });
 
         // Carrega configurações se existirem
         if (data.config) {
@@ -320,6 +335,25 @@ export function HydraulicCalculator() {
       title: 'Relatório exportado',
       description: 'Arquivo salvo como relatorio_hidraulico_ntcb.txt',
     });
+  };
+
+  const handleExportWord = async () => {
+    if (!result) return;
+
+    try {
+      await generateWordReport({ result, nodes, pipes });
+      toast({
+        title: 'Relatório Word exportado',
+        description: 'Memorial detalhado com Tabela 6.7 salvo com sucesso.',
+      });
+    } catch (error) {
+      console.error('Word export error:', error);
+      toast({
+        title: 'Erro ao exportar Word',
+        description: error instanceof Error ? error.message : 'Erro desconhecido',
+        variant: 'destructive'
+      });
+    }
   };
 
   return (
@@ -374,6 +408,15 @@ export function HydraulicCalculator() {
               >
                 <Download className="h-4 w-4 mr-2" />
                 Relatório
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleExportWord}
+                disabled={!result}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Word
               </Button>
               <Button onClick={handleCalculate} disabled={isCalculating}>
                 <Calculator className="h-4 w-4 mr-2" />
@@ -444,7 +487,7 @@ export function HydraulicCalculator() {
 // Função auxiliar para gerar relatório em texto
 function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]): string {
   const lines: string[] = [];
-  const sep = '='.repeat(70);
+  const sep = '='.repeat(90);
   
   lines.push(sep);
   lines.push('RELATÓRIO DE DIMENSIONAMENTO HIDRÁULICO - NTCB 19/2020');
@@ -497,21 +540,61 @@ function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]):
   }
   lines.push('');
   
-  // Trechos
+  // Trechos - Memorial Detalhado
   lines.push('5. MEMORIAL DE CÁLCULO - TRECHOS');
-  lines.push('-'.repeat(50));
-  lines.push('Trecho  | Q(L/min) | V(m/s) | J(m/m)  | Leq(m) | ΔH(mca) | Pi(mca) | Pf(mca)');
-  for (const pipe of result.hydraulics.pipeDetails) {
-    const pipeData = pipes.find(p => p.id === pipe.pipeId);
-    const pipeName = pipeData?.name || pipe.pipeId;
+  lines.push('-'.repeat(90));
+  lines.push('TRECHO        | Nó Início (Zi)   | Nó Fim (Zf)      | Q(L/min) | V(m/s) | L(m)  | Leq(m) | J(m/m)  | ΔH(mca) | ΔZ(m)  | Pi(mca) | Pf(mca)');
+  lines.push('-'.repeat(90));
+  
+  for (const detail of result.hydraulics.pipeDetails) {
+    const pipe = pipes.find(p => p.id === detail.pipeId);
+    if (!pipe) continue;
+    
+    const startNode = nodes.find(n => n.id === pipe.startNodeId);
+    const endNode = nodes.find(n => n.id === pipe.endNodeId);
+    const leq = pipe.equivalentLength || 0;
+    const dZ = (endNode?.elevation || 0) - (startNode?.elevation || 0);
+    
+    const startInfo = `${(startNode?.name || pipe.startNodeId).substring(0,10)} (${(startNode?.elevation || 0).toFixed(1)})`;
+    const endInfo = `${(endNode?.name || pipe.endNodeId).substring(0,10)} (${(endNode?.elevation || 0).toFixed(1)})`;
+    
     lines.push(
-      `${pipeName.padEnd(7)} | ${pipe.flowLmin.toFixed(1).padStart(8)} | ${pipe.velocity.toFixed(2).padStart(6)} | ${pipe.headLossUnit.toFixed(4).padStart(7)} | ${(pipe.equivalentLength || 0).toFixed(1).padStart(6)} | ${pipe.headLossTotal.toFixed(2).padStart(7)} | ${pipe.startPressure.toFixed(2).padStart(7)} | ${pipe.endPressure.toFixed(2).padStart(7)}`
+      `${(pipe.name || detail.pipeId).padEnd(13)} | ${startInfo.padEnd(16)} | ${endInfo.padEnd(16)} | ${detail.flowLmin.toFixed(1).padStart(8)} | ${detail.velocity.toFixed(2).padStart(6)} | ${pipe.length.toFixed(1).padStart(5)} | ${leq.toFixed(1).padStart(6)} | ${detail.headLossUnit.toFixed(5).padStart(7)} | ${detail.headLossTotal.toFixed(2).padStart(7)} | ${dZ.toFixed(2).padStart(6)} | ${detail.startPressure.toFixed(2).padStart(7)} | ${detail.endPressure.toFixed(2).padStart(7)}`
     );
   }
   lines.push('');
   
+  // Acessórios detalhados
+  lines.push('6. DETALHAMENTO DE ACESSÓRIOS POR TRECHO');
+  lines.push('-'.repeat(50));
+  
+  let hasAccessories = false;
+  for (const pipe of pipes) {
+    if (!pipe.accessories || pipe.accessories.length === 0) continue;
+    hasAccessories = true;
+    
+    const diamMm = Math.round(m_to_mm(pipe.diameter));
+    lines.push(`\nTrecho: ${pipe.name || pipe.id} (Ø${diamMm}mm - ${pipe.material})`);
+    lines.push('  Conexão/Acessório                    | Qtd | Leq Unit.(m) | Leq Total(m)');
+    lines.push('  ' + '-'.repeat(75));
+    
+    let totalLeq = 0;
+    for (const acc of pipe.accessories) {
+      const accName = (ACCESSORY_TYPES as Record<string, string>)[acc.type] || acc.type;
+      totalLeq += acc.equivalentLengthTotal;
+      lines.push(`  ${accName.padEnd(38)} | ${acc.quantity.toString().padStart(3)} | ${acc.equivalentLengthUnit.toFixed(2).padStart(12)} | ${acc.equivalentLengthTotal.toFixed(2).padStart(12)}`);
+    }
+    lines.push('  ' + '-'.repeat(75));
+    lines.push(`  ${'TOTAL'.padEnd(38)} |     |              | ${totalLeq.toFixed(2).padStart(12)}`);
+  }
+  
+  if (!hasAccessories) {
+    lines.push('Nenhum acessório cadastrado nos trechos.');
+  }
+  lines.push('');
+  
   // Status
-  lines.push('6. VERIFICAÇÕES');
+  lines.push('7. VERIFICAÇÕES');
   lines.push('-'.repeat(50));
   lines.push(`Pressões mínimas (esguicho ≥ ${result.config.demandConfig.minNozzlePressure} mca): ${result.checks.minPressureOk ? 'OK' : 'FALHA'}`);
   lines.push(`Velocidades: ${result.checks.velocitiesOk ? 'OK' : 'VERIFICAR'}`);
