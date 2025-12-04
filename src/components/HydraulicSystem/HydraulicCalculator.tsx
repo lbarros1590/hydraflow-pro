@@ -1,5 +1,5 @@
 /**
- * Calculadora Hidráulica Principal
+ * Calculadora Hidráulica Principal - NTCB 19/2020
  * Componente orquestrador do sistema
  */
 
@@ -12,8 +12,9 @@ import { BuildingConfig } from './BuildingConfig';
 import { ResultsPanel } from './ResultsPanel';
 import { NetworkVisualization } from './NetworkVisualization';
 import { calculateSystem } from '@/engine/calculateSystem';
-import type { Node, Pipe, SystemResult } from '@/models/types';
+import type { Node, Pipe, SystemResult, PipeMaterial } from '@/models/types';
 import { mm_to_m } from '@/core/units';
+import { getHazenWilliamsC } from '@/core/equivalentLength';
 
 // Example data for demo
 const DEMO_NODES: Node[] = [
@@ -26,18 +27,24 @@ const DEMO_NODES: Node[] = [
 ];
 
 const DEMO_PIPES: Pipe[] = [
-  { id: 'P1', name: 'Trecho 1', startNodeId: 'N1', endNodeId: 'N2', length: 15, diameter: mm_to_m(65), roughness: 140, material: 'pvc', equivalentLength: 5 },
-  { id: 'P2', name: 'Trecho 2', startNodeId: 'N2', endNodeId: 'N3', length: 20, diameter: mm_to_m(65), roughness: 140, material: 'pvc', equivalentLength: 3 },
-  { id: 'P3', name: 'Trecho 3', startNodeId: 'N3', endNodeId: 'N4', length: 10, diameter: mm_to_m(50), roughness: 140, material: 'pvc', equivalentLength: 2 },
-  { id: 'P4', name: 'Trecho 4', startNodeId: 'N3', endNodeId: 'N5', length: 15, diameter: mm_to_m(50), roughness: 140, material: 'pvc', equivalentLength: 4 },
-  { id: 'P5', name: 'Trecho 5', startNodeId: 'N2', endNodeId: 'N6', length: 25, diameter: mm_to_m(50), roughness: 140, material: 'pvc', equivalentLength: 6 },
+  { id: 'P1', name: 'Trecho 1', startNodeId: 'N1', endNodeId: 'N2', length: 15, diameter: mm_to_m(65), roughness: getHazenWilliamsC('PVC'), material: 'PVC', accessories: [], equivalentLength: 0 },
+  { id: 'P2', name: 'Trecho 2', startNodeId: 'N2', endNodeId: 'N3', length: 20, diameter: mm_to_m(65), roughness: getHazenWilliamsC('PVC'), material: 'PVC', accessories: [], equivalentLength: 0 },
+  { id: 'P3', name: 'Trecho 3', startNodeId: 'N3', endNodeId: 'N4', length: 10, diameter: mm_to_m(50), roughness: getHazenWilliamsC('PVC'), material: 'PVC', accessories: [], equivalentLength: 0 },
+  { id: 'P4', name: 'Trecho 4', startNodeId: 'N3', endNodeId: 'N5', length: 15, diameter: mm_to_m(50), roughness: getHazenWilliamsC('PVC'), material: 'PVC', accessories: [], equivalentLength: 0 },
+  { id: 'P5', name: 'Trecho 5', startNodeId: 'N2', endNodeId: 'N6', length: 25, diameter: mm_to_m(50), roughness: getHazenWilliamsC('PVC'), material: 'PVC', accessories: [], equivalentLength: 0 },
 ];
 
 export function HydraulicCalculator() {
   const [nodes, setNodes] = useState<Node[]>(DEMO_NODES);
   const [pipes, setPipes] = useState<Pipe[]>(DEMO_PIPES);
-  const [buildingType, setBuildingType] = useState('residencial_multifamiliar');
+  
+  // NTCB 19/2020 parameters
+  const [occupancyCode, setOccupancyCode] = useState('A-2');
+  const [fireLoadMJm2, setFireLoadMJm2] = useState(300);
+  const [totalAreaM2, setTotalAreaM2] = useState(1500);
+  const [buildingHeight, setBuildingHeight] = useState(15);
   const [pumpEfficiency, setPumpEfficiency] = useState(0.65);
+  
   const [result, setResult] = useState<SystemResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const { toast } = useToast();
@@ -90,8 +97,11 @@ export function HydraulicCalculator() {
         const calcResult = calculateSystem({
           nodes,
           pipes,
-          buildingType,
           pumpEfficiency,
+          occupancyCode,
+          fireLoadMJm2,
+          totalAreaM2,
+          buildingHeight,
         });
 
         setResult(calcResult);
@@ -110,7 +120,7 @@ export function HydraulicCalculator() {
         } else {
           toast({
             title: 'Cálculo concluído',
-            description: 'Sistema dimensionado com sucesso!',
+            description: 'Sistema dimensionado conforme NTCB 19/2020!',
           });
         }
       } catch (error) {
@@ -124,12 +134,15 @@ export function HydraulicCalculator() {
         setIsCalculating(false);
       }
     }, 500);
-  }, [nodes, pipes, buildingType, pumpEfficiency, toast]);
+  }, [nodes, pipes, occupancyCode, fireLoadMJm2, totalAreaM2, buildingHeight, pumpEfficiency, toast]);
 
   const handleReset = () => {
     setNodes(DEMO_NODES);
     setPipes(DEMO_PIPES);
-    setBuildingType('residencial_multifamiliar');
+    setOccupancyCode('A-2');
+    setFireLoadMJm2(300);
+    setTotalAreaM2(1500);
+    setBuildingHeight(15);
     setPumpEfficiency(0.65);
     setResult(null);
   };
@@ -142,13 +155,13 @@ export function HydraulicCalculator() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'relatorio_hidraulico.txt';
+    a.download = 'relatorio_hidraulico_ntcb.txt';
     a.click();
     URL.revokeObjectURL(url);
 
     toast({
       title: 'Relatório exportado',
-      description: 'Arquivo salvo como relatorio_hidraulico.txt',
+      description: 'Arquivo salvo como relatorio_hidraulico_ntcb.txt',
     });
   };
 
@@ -161,13 +174,13 @@ export function HydraulicCalculator() {
             <div>
               <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
                 <span className="text-primary">⚡</span>
-                HydraCalc
+                HydraFlow Pro
                 <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                  v2.0
+                  NTCB 19/2020
                 </span>
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Sistema Hidráulico para Dimensionamento de Hidrantes/HCI
+                Sistema Hidráulico para Dimensionamento de Hidrantes - Norma CBMGO
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -199,9 +212,15 @@ export function HydraulicCalculator() {
           {/* Left Column - Input */}
           <div className="lg:col-span-1 space-y-6">
             <BuildingConfig
-              buildingType={buildingType}
+              occupancyCode={occupancyCode}
+              fireLoadMJm2={fireLoadMJm2}
+              totalAreaM2={totalAreaM2}
+              buildingHeight={buildingHeight}
               pumpEfficiency={pumpEfficiency}
-              onBuildingTypeChange={setBuildingType}
+              onOccupancyChange={setOccupancyCode}
+              onFireLoadChange={setFireLoadMJm2}
+              onAreaChange={setTotalAreaM2}
+              onHeightChange={setBuildingHeight}
               onEfficiencyChange={setPumpEfficiency}
             />
             <NetworkEditor
@@ -232,10 +251,10 @@ export function HydraulicCalculator() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>
-              Cálculos baseados em Hazen-Williams | Normas: IT-22 CBPMESP
+              Cálculos baseados em Hazen-Williams | Norma: NTCB 19/2020 - CBMGO
             </span>
             <span className="font-mono">
-              Sistema desenvolvido para fins educacionais
+              Sistema de dimensionamento profissional
             </span>
           </div>
         </div>
@@ -247,29 +266,28 @@ export function HydraulicCalculator() {
 // Helper function to generate text report
 function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]): string {
   const lines: string[] = [];
-  const sep = '='.repeat(60);
+  const sep = '='.repeat(70);
   
   lines.push(sep);
-  lines.push('RELATÓRIO DE DIMENSIONAMENTO HIDRÁULICO');
-  lines.push('Sistema de Hidrantes / HCI');
+  lines.push('RELATÓRIO DE DIMENSIONAMENTO HIDRÁULICO - NTCB 19/2020');
+  lines.push('Sistema de Hidrantes / HCI - Corpo de Bombeiros GO');
   lines.push(sep);
   lines.push('');
   
-  // Building info
-  lines.push('1. CLASSIFICAÇÃO DA EDIFICAÇÃO');
-  lines.push('-'.repeat(40));
-  lines.push(`Tipo: ${result.config.buildingClassification.name}`);
-  lines.push(`Código: ${result.config.buildingClassification.code}`);
-  lines.push(`Nível de Risco: ${result.config.buildingClassification.riskLevel}`);
+  // Classification
+  lines.push('1. ENQUADRAMENTO NORMATIVO');
+  lines.push('-'.repeat(50));
+  lines.push(`Tipo de Sistema: ${result.config.ntcbSystemType || 'N/A'}`);
   lines.push(`Vazão por Hidrante: ${result.config.demandConfig.flowPerHydrant} L/min`);
   lines.push(`Hidrantes Simultâneos: ${result.config.demandConfig.simultaneousHydrants}`);
   lines.push(`Pressão Mín. Esguicho: ${result.config.demandConfig.minNozzlePressure} mca`);
+  lines.push(`Mangueira Máx.: ${result.config.demandConfig.hoseLength} m`);
   lines.push('');
   
   // Pump
   lines.push('2. BOMBA DE INCÊNDIO');
-  lines.push('-'.repeat(40));
-  lines.push(`Pressão Mínima: ${result.pump.minPressure.toFixed(2)} mca`);
+  lines.push('-'.repeat(50));
+  lines.push(`Altura Manométrica: ${result.pump.minPressure.toFixed(2)} mca`);
   lines.push(`Vazão Total: ${result.pump.totalFlowLmin.toFixed(1)} L/min`);
   lines.push(`Potência Hidráulica: ${result.pump.hydraulicPower.toFixed(2)} kW`);
   lines.push(`Potência Motor: ${result.pump.motorPower.toFixed(2)} kW`);
@@ -278,35 +296,39 @@ function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]):
   lines.push('');
   
   // Reserve
-  lines.push('3. RESERVA TÉCNICA DE INCÊNDIO');
-  lines.push('-'.repeat(40));
-  lines.push(`Volume: ${result.reserve.volumeM3.toFixed(1)} m³ (${result.reserve.volumeLiters} L)`);
-  lines.push(`Autonomia: ${result.reserve.timeMinutes} minutos`);
-  lines.push('');
-  
-  // Pipes
-  lines.push('4. MEMORIAL DE CÁLCULO - TRECHOS');
-  lines.push('-'.repeat(40));
-  lines.push('Trecho | Q(L/min) | V(m/s) | J(m/m) | ΔH(mca)');
-  for (const pipe of result.hydraulics.pipeDetails) {
-    lines.push(
-      `${pipe.pipeId.padEnd(7)} | ${pipe.flowLmin.toFixed(1).padStart(8)} | ${pipe.velocity.toFixed(2).padStart(6)} | ${pipe.headLossUnit.toFixed(4).padStart(6)} | ${pipe.headLossTotal.toFixed(2).padStart(7)}`
-    );
-  }
+  lines.push('3. RESERVA TÉCNICA DE INCÊNDIO (RTI)');
+  lines.push('-'.repeat(50));
+  lines.push(`Volume: ${result.reserve.volumeM3.toFixed(1)} m³ (${result.reserve.volumeLiters.toLocaleString()} L)`);
   lines.push('');
   
   // Hydrants
-  lines.push('5. HIDRANTES');
-  lines.push('-'.repeat(40));
-  lines.push('Mais Desfavoráveis:');
+  lines.push('4. ANÁLISE DE HIDRANTES');
+  lines.push('-'.repeat(50));
+  lines.push('Hidrantes Ativos (mais desfavoráveis):');
   for (const h of result.hydrants.mostUnfavorable) {
-    lines.push(`  ${h.id}: ${h.pressure.toFixed(2)} mca (esguicho: ${h.nozzlePressure.toFixed(2)} mca)`);
+    lines.push(`  ${h.id}: P.válvula=${h.pressure.toFixed(2)} mca | P.esguicho=${h.nozzlePressure.toFixed(2)} mca`);
+  }
+  if (result.hydrants.mostFavorable) {
+    lines.push('');
+    lines.push('Hidrante Mais Favorável:');
+    lines.push(`  ${result.hydrants.mostFavorable.id}: P.válvula=${result.hydrants.mostFavorable.pressure.toFixed(2)} mca | P.esguicho=${result.hydrants.mostFavorable.nozzlePressure.toFixed(2)} mca`);
+  }
+  lines.push('');
+  
+  // Pipes
+  lines.push('5. MEMORIAL DE CÁLCULO - TRECHOS');
+  lines.push('-'.repeat(50));
+  lines.push('Trecho  | Q(L/min) | V(m/s) | J(m/m)  | Leq(m) | ΔH(mca) | Pi(mca) | Pf(mca)');
+  for (const pipe of result.hydraulics.pipeDetails) {
+    lines.push(
+      `${pipe.pipeId.padEnd(7)} | ${pipe.flowLmin.toFixed(1).padStart(8)} | ${pipe.velocity.toFixed(2).padStart(6)} | ${pipe.headLossUnit.toFixed(4).padStart(7)} | ${(pipe.equivalentLength || 0).toFixed(1).padStart(6)} | ${pipe.headLossTotal.toFixed(2).padStart(7)} | ${pipe.startPressure.toFixed(2).padStart(7)} | ${pipe.endPressure.toFixed(2).padStart(7)}`
+    );
   }
   lines.push('');
   
   // Status
   lines.push('6. VERIFICAÇÕES');
-  lines.push('-'.repeat(40));
+  lines.push('-'.repeat(50));
   lines.push(`Pressões mínimas: ${result.checks.minPressureOk ? 'OK' : 'FALHA'}`);
   lines.push(`Velocidades: ${result.checks.velocitiesOk ? 'OK' : 'VERIFICAR'}`);
   lines.push(`Balanço de massa: ${result.checks.massBalanceOk ? 'OK' : 'VERIFICAR'}`);
@@ -326,6 +348,7 @@ function generateTextReport(result: SystemResult, nodes: Node[], pipes: Pipe[]):
   lines.push('');
   lines.push(sep);
   lines.push(`Relatório gerado em: ${new Date().toLocaleString('pt-BR')}`);
+  lines.push('Norma de referência: NTCB 19/2020 - CBMGO');
   lines.push(sep);
   
   return lines.join('\n');
