@@ -1,50 +1,125 @@
 /**
- * Project Context - Shared state between Wizard and Hydraulic Calculator
+ * Project Context - Manages projects list and current project
  */
-import { createContext, useContext, useState, ReactNode } from 'react';
-import type { ProjectFormData } from '@/components/Wizard/types';
+import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import type { ProjectFormData, SavedProject, ProjectStatus } from '@/components/Wizard/types';
 
 interface ProjectContextType {
-  projectData: ProjectFormData | null;
-  setProjectData: (data: ProjectFormData | null) => void;
-  clearProjectData: () => void;
+  projects: SavedProject[];
+  currentProject: SavedProject | null;
+  setCurrentProject: (project: SavedProject | null) => void;
+  saveProject: (data: ProjectFormData, status?: ProjectStatus) => SavedProject;
+  updateProject: (id: string, data: Partial<ProjectFormData>, status?: ProjectStatus) => void;
+  deleteProject: (id: string) => void;
+  getProjectById: (id: string) => SavedProject | undefined;
+  clearAll: () => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | null>(null);
 
+const STORAGE_KEY = 'hydraflow_projects';
+
+function generateId(): string {
+  return `proj_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
+function calculateRiskClass(data: ProjectFormData): 'baixo' | 'medio' | 'alto' {
+  if (!data.sectors || data.sectors.length === 0) return 'medio';
+  
+  const maxFireLoad = Math.max(...data.sectors.map(s => s.fireLoad || 300));
+  const hasSpecialRisks = data.specialRisks && data.specialRisks.length > 0;
+  
+  if (maxFireLoad > 1200 || hasSpecialRisks) return 'alto';
+  if (maxFireLoad > 300) return 'medio';
+  return 'baixo';
+}
+
 export function ProjectProvider({ children }: { children: ReactNode }) {
-  const [projectData, setProjectData] = useState<ProjectFormData | null>(() => {
-    // Try to load from localStorage
-    const saved = localStorage.getItem('hydraflow_project');
+  const [projects, setProjects] = useState<SavedProject[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch {
-        return null;
+        return [];
       }
     }
-    return null;
+    return [];
   });
 
-  const handleSetProjectData = (data: ProjectFormData | null) => {
-    setProjectData(data);
-    if (data) {
-      localStorage.setItem('hydraflow_project', JSON.stringify(data));
-    } else {
-      localStorage.removeItem('hydraflow_project');
-    }
-  };
+  const [currentProject, setCurrentProject] = useState<SavedProject | null>(null);
 
-  const clearProjectData = () => {
-    setProjectData(null);
-    localStorage.removeItem('hydraflow_project');
-  };
+  const persistProjects = useCallback((newProjects: SavedProject[]) => {
+    setProjects(newProjects);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newProjects));
+  }, []);
+
+  const saveProject = useCallback((data: ProjectFormData, status: ProjectStatus = 'rascunho'): SavedProject => {
+    const now = new Date().toISOString();
+    const newProject: SavedProject = {
+      id: generateId(),
+      data,
+      status,
+      riskClass: calculateRiskClass(data),
+      createdAt: now,
+      updatedAt: now,
+    };
+    
+    const updated = [...projects, newProject];
+    persistProjects(updated);
+    setCurrentProject(newProject);
+    return newProject;
+  }, [projects, persistProjects]);
+
+  const updateProject = useCallback((id: string, data: Partial<ProjectFormData>, status?: ProjectStatus) => {
+    const updated = projects.map(p => {
+      if (p.id === id) {
+        const newData = { ...p.data, ...data };
+        const updatedProject: SavedProject = {
+          ...p,
+          data: newData,
+          status: status || p.status,
+          riskClass: calculateRiskClass(newData),
+          updatedAt: new Date().toISOString(),
+        };
+        if (currentProject?.id === id) {
+          setCurrentProject(updatedProject);
+        }
+        return updatedProject;
+      }
+      return p;
+    });
+    persistProjects(updated);
+  }, [projects, currentProject, persistProjects]);
+
+  const deleteProject = useCallback((id: string) => {
+    const updated = projects.filter(p => p.id !== id);
+    persistProjects(updated);
+    if (currentProject?.id === id) {
+      setCurrentProject(null);
+    }
+  }, [projects, currentProject, persistProjects]);
+
+  const getProjectById = useCallback((id: string) => {
+    return projects.find(p => p.id === id);
+  }, [projects]);
+
+  const clearAll = useCallback(() => {
+    setProjects([]);
+    setCurrentProject(null);
+    localStorage.removeItem(STORAGE_KEY);
+  }, []);
 
   return (
     <ProjectContext.Provider value={{ 
-      projectData, 
-      setProjectData: handleSetProjectData, 
-      clearProjectData 
+      projects,
+      currentProject,
+      setCurrentProject,
+      saveProject,
+      updateProject,
+      deleteProject,
+      getProjectById,
+      clearAll,
     }}>
       {children}
     </ProjectContext.Provider>
@@ -59,14 +134,13 @@ export function useProject() {
   return context;
 }
 
-// Helper function to extract hydraulic config from project data
-export function extractHydraulicConfig(data: ProjectFormData) {
-  // Get main occupancy (largest area sector)
+// Helper to extract hydraulic config from project
+export function extractHydraulicConfig(project: SavedProject) {
+  const data = project.data;
   const mainSector = data.sectors.reduce((main, sector) => 
     sector.area > (main?.area || 0) ? sector : main
   , data.sectors[0]);
 
-  // Calculate average fire load weighted by area
   const totalArea = data.sectors.reduce((sum, s) => sum + s.area, 0);
   const avgFireLoad = data.sectors.reduce((sum, s) => 
     sum + (s.fireLoad || 0) * s.area, 0
