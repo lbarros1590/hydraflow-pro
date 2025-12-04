@@ -178,7 +178,19 @@ export function SavedCalculations({ projectId, onLoad }: SavedCalculationsProps)
   }
 
   if (calculations.length === 0) {
-    return null;
+    return (
+      <Card>
+        <CardContent className="py-8">
+          <div className="text-center text-muted-foreground">
+            <Calculator className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p className="font-medium">Nenhum cálculo salvo</p>
+            <p className="text-sm mt-1">
+              Use o botão "Salvar no Projeto" na calculadora para guardar seus cálculos.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
