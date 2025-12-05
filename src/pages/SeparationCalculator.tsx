@@ -31,6 +31,7 @@ import {
   XCircle,
   AlertTriangle,
   Printer,
+  Save,
 } from 'lucide-react';
 import {
   Select,
@@ -116,10 +117,12 @@ export default function SeparationCalculator() {
     id: crypto.randomUUID(),
   });
   const [globalExistingDistance, setGlobalExistingDistance] = useState<number>(70.24);
+  const [saving, setSaving] = useState(false);
+  const [savedCalculationId, setSavedCalculationId] = useState<string | null>(null);
 
   useEffect(() => {
     if (projectId) {
-      fetchProject();
+      fetchProjectAndCalculation();
     } else {
       setBuildings([
         { ...defaultBuilding, id: '1', name: 'Bloco industrial', width: 46.97, height: 10, openingPercentage: 19, fireLoadMJm2: 500 },
@@ -127,6 +130,135 @@ export default function SeparationCalculator() {
       ]);
     }
   }, [projectId]);
+
+  const fetchProjectAndCalculation = async () => {
+    try {
+      setLoadingProject(true);
+      
+      // Buscar projeto
+      const { data: projectData, error: projectError } = await supabase
+        .from('projects')
+        .select('id, data')
+        .eq('id', projectId)
+        .maybeSingle();
+
+      if (projectError) throw projectError;
+
+      if (projectData) {
+        setProject(projectData as Project);
+      }
+
+      // Buscar cálculo salvo
+      const { data: calcData, error: calcError } = await supabase
+        .from('separation_calculations')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (calcError) throw calcError;
+
+      if (calcData) {
+        // Carregar cálculo salvo
+        setSavedCalculationId(calcData.id);
+        const savedBuildings = (calcData.buildings as unknown as RegisteredBuilding[]) || [];
+        const savedCalcs = (calcData.calculations as unknown as CalculationPair[]) || [];
+        const config = (calcData.config as unknown as { hasFireDepartment?: boolean; globalExistingDistance?: number }) || {};
+        
+        setBuildings(savedBuildings);
+        setCalculations(savedCalcs);
+        if (config.hasFireDepartment !== undefined) setHasFireDepartment(config.hasFireDepartment);
+        if (config.globalExistingDistance !== undefined) setGlobalExistingDistance(config.globalExistingDistance);
+        
+        toast({
+          title: 'Cálculo carregado',
+          description: `${savedBuildings.length} edificação(ões) e ${savedCalcs.length} par(es) de cálculo`,
+        });
+      } else if (projectData) {
+        // Carregar setores do projeto como edificações
+        const pData = projectData.data as ProjectFormData;
+        if (pData.sectors && pData.sectors.length > 0) {
+          const buildingsFromSectors = pData.sectors.map((sector: SectorFormData) => ({
+            ...defaultBuilding,
+            id: sector.id,
+            name: sector.name,
+            width: Math.sqrt(sector.area || 100),
+            height: (sector.floorHeight || 3) * (sector.numberOfFloors || 1),
+            openingPercentage: 30,
+            fireLoadMJm2: sector.fireLoad || 500,
+            hasSprinklers: pData.mandatoryMeasures?.includes('spk') || false,
+            trrf: 60,
+            numberOfFloors: sector.numberOfFloors || 1,
+            totalArea: sector.area || 100,
+            fromSector: true,
+            sectorId: sector.id,
+          }));
+          setBuildings(buildingsFromSectors);
+          toast({
+            title: 'Setores carregados',
+            description: `${buildingsFromSectors.length} setor(es) importados do projeto`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível carregar os dados',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingProject(false);
+    }
+  };
+
+  const saveCalculation = async () => {
+    if (!projectId) {
+      toast({ title: 'Erro', description: 'Salvar só está disponível em projetos', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setSaving(true);
+      
+      const dataToSave = {
+        project_id: projectId,
+        buildings: JSON.parse(JSON.stringify(buildings)),
+        calculations: JSON.parse(JSON.stringify(calculations)),
+        config: JSON.parse(JSON.stringify({ hasFireDepartment, globalExistingDistance })),
+        is_active: true,
+      };
+
+      if (savedCalculationId) {
+        // Atualizar existente
+        const { error } = await supabase
+          .from('separation_calculations')
+          .update(dataToSave)
+          .eq('id', savedCalculationId);
+        
+        if (error) throw error;
+        toast({ title: 'Cálculo atualizado' });
+      } else {
+        // Criar novo
+        const { data: newCalc, error } = await supabase
+          .from('separation_calculations')
+          .insert([dataToSave])
+          .select('id')
+          .single();
+        
+        if (error) throw error;
+        setSavedCalculationId(newCalc.id);
+        toast({ title: 'Cálculo salvo' });
+      }
+    } catch (error) {
+      console.error('Error saving:', error);
+      toast({ title: 'Erro ao salvar', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const fetchProject = async () => {
     try {
@@ -439,10 +571,16 @@ export default function SeparationCalculator() {
             Limpar
           </Button>
           {projectId && (
-            <Button variant="outline" onClick={fetchProject}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Recarregar
-            </Button>
+            <>
+              <Button variant="outline" onClick={fetchProjectAndCalculation}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Recarregar
+              </Button>
+              <Button variant="outline" onClick={saveCalculation} disabled={saving}>
+                <Save className="h-4 w-4 mr-2" />
+                {saving ? 'Salvando...' : savedCalculationId ? 'Atualizar' : 'Salvar'}
+              </Button>
+            </>
           )}
           <Button variant="outline" onClick={handleExportCSV} disabled={calculations.every(c => !c.result)}>
             <Download className="h-4 w-4 mr-2" />

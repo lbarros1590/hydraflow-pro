@@ -35,6 +35,50 @@ export type Database = {
         }
         Relationships: []
       }
+      emergency_exit_calculations: {
+        Row: {
+          buildings: Json | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          name: string | null
+          project_id: string
+          results: Json | null
+          updated_at: string | null
+          version: number | null
+        }
+        Insert: {
+          buildings?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string | null
+          project_id: string
+          results?: Json | null
+          updated_at?: string | null
+          version?: number | null
+        }
+        Update: {
+          buildings?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string | null
+          project_id?: string
+          results?: Json | null
+          updated_at?: string | null
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emergency_exit_calculations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hydraulic_calculations: {
         Row: {
           accessories: Json | null
@@ -316,6 +360,53 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "available_states"
             referencedColumns: ["code"]
+          },
+        ]
+      }
+      separation_calculations: {
+        Row: {
+          buildings: Json | null
+          calculations: Json | null
+          config: Json | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          name: string | null
+          project_id: string
+          updated_at: string | null
+          version: number | null
+        }
+        Insert: {
+          buildings?: Json | null
+          calculations?: Json | null
+          config?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string | null
+          project_id: string
+          updated_at?: string | null
+          version?: number | null
+        }
+        Update: {
+          buildings?: Json | null
+          calculations?: Json | null
+          config?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string | null
+          project_id?: string
+          updated_at?: string | null
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "separation_calculations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
           },
         ]
       }
