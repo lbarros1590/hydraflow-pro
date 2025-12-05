@@ -40,6 +40,8 @@ import {
   Flame,
   ChevronDown,
   User,
+  DoorOpen,
+  Ruler,
 } from 'lucide-react';
 
 const mainNavItems = [
@@ -50,6 +52,8 @@ const mainNavItems = [
 
 const toolsNavItems = [
   { title: 'Calculadora Hidráulica', url: '/app/calculator', icon: Calculator },
+  { title: 'Saídas de Emergência', url: '/app/calculator/saidas', icon: DoorOpen },
+  { title: 'Separação entre Edificações', url: '/app/calculator/separacao', icon: Ruler },
 ];
 
 const resourcesNavItems = [
