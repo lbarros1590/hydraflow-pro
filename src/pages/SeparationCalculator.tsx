@@ -1,7 +1,10 @@
 /**
  * Calculadora de Separação entre Edificações - NTCB 09/2020
+ * Integrado com setores do projeto
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import {
   Building2,
@@ -19,6 +23,8 @@ import {
   RotateCcw,
   Plus,
   Trash2,
+  ArrowLeft,
+  RefreshCw,
 } from 'lucide-react';
 import {
   calculateSeparation,
@@ -43,9 +49,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import type { ProjectFormData, SectorFormData } from '@/components/Wizard/types';
 
 interface RegisteredBuilding extends BuildingData {
   fireLoadMJm2: number;
+  fromSector?: boolean; // Indica se veio de um setor do projeto
+  sectorId?: string;
 }
 
 interface CalculationPair {
@@ -54,6 +63,11 @@ interface CalculationPair {
   emExposicaoId: string;
   distanciaPrevistaExistente: number;
   result?: SeparationResult;
+}
+
+interface Project {
+  id: string;
+  data: ProjectFormData;
 }
 
 const defaultBuilding: RegisteredBuilding = {
@@ -67,13 +81,16 @@ const defaultBuilding: RegisteredBuilding = {
 };
 
 export default function SeparationCalculator() {
+  const { id: projectId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { toast } = useToast();
   
+  // Projeto vinculado (se houver)
+  const [project, setProject] = useState<Project | null>(null);
+  const [loadingProject, setLoadingProject] = useState(!!projectId);
+  
   // Edificações cadastradas
-  const [buildings, setBuildings] = useState<RegisteredBuilding[]>([
-    { ...defaultBuilding, id: '1', name: 'Bloco industrial' },
-    { ...defaultBuilding, id: '2', name: 'Alojamento funcionários' },
-  ]);
+  const [buildings, setBuildings] = useState<RegisteredBuilding[]>([]);
   
   // Pares de cálculo
   const [calculations, setCalculations] = useState<CalculationPair[]>([]);
@@ -89,6 +106,65 @@ export default function SeparationCalculator() {
   
   // Distância prevista/existente
   const [distanciaPrevista, setDistanciaPrevista] = useState<number>(70.24);
+
+  // Carregar projeto se houver projectId
+  useEffect(() => {
+    if (projectId) {
+      fetchProject();
+    } else {
+      // Edificações padrão quando não há projeto
+      setBuildings([
+        { ...defaultBuilding, id: '1', name: 'Edificação A' },
+        { ...defaultBuilding, id: '2', name: 'Edificação B' },
+      ]);
+    }
+  }, [projectId]);
+
+  const fetchProject = async () => {
+    try {
+      setLoadingProject(true);
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id, data')
+        .eq('id', projectId)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (data) {
+        setProject(data as Project);
+        // Converter setores do projeto em edificações
+        const projectData = data.data as ProjectFormData;
+        if (projectData.sectors && projectData.sectors.length > 0) {
+          const buildingsFromSectors = projectData.sectors.map((sector: SectorFormData) => ({
+            id: sector.id,
+            name: sector.name,
+            width: Math.sqrt(sector.area || 100), // Estimativa: lado = raiz(área)
+            height: (sector.floorHeight || 3) * (sector.numberOfFloors || 1),
+            openingPercentage: 30, // Valor padrão
+            fireLoadMJm2: sector.fireLoad || 500,
+            hasSprinklers: projectData.mandatoryMeasures?.includes('spk') || false,
+            fromSector: true,
+            sectorId: sector.id,
+          }));
+          setBuildings(buildingsFromSectors);
+          toast({
+            title: 'Setores carregados',
+            description: `${buildingsFromSectors.length} setor(es) importados do projeto`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching project:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível carregar o projeto',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingProject(false);
+    }
+  };
 
   const addBuilding = () => {
     if (!newBuilding.name.trim()) {
@@ -177,23 +253,27 @@ export default function SeparationCalculator() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'calculo_separacao_ntcb09.csv';
+    a.download = `calculo_separacao_ntcb09${projectId ? `_${projectId}` : ''}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast({ title: 'Exportado com sucesso' });
   };
 
   const handleReset = () => {
-    setBuildings([
-      { ...defaultBuilding, id: '1', name: 'Bloco industrial' },
-      { ...defaultBuilding, id: '2', name: 'Alojamento funcionários' },
-    ]);
+    if (project) {
+      fetchProject(); // Recarrega do projeto
+    } else {
+      setBuildings([
+        { ...defaultBuilding, id: '1', name: 'Edificação A' },
+        { ...defaultBuilding, id: '2', name: 'Edificação B' },
+      ]);
+    }
     setCalculations([]);
   };
 
   // Componente para exibir uma linha de resultado conforme a imagem
   const ResultTable = ({ result, distanciaPrevista }: { result: SeparationResult; distanciaPrevista: number }) => {
-    const renderRow = (calc: SingleCalculationResult, isFirst: boolean) => (
+    const renderRow = (calc: SingleCalculationResult) => (
       <div key={calc.edificacaoExpositora + calc.edificacaoEmExposicao} className="border rounded-lg overflow-hidden mb-4">
         {/* Header */}
         <div className="bg-muted px-4 py-2 border-b">
@@ -276,31 +356,59 @@ export default function SeparationCalculator() {
 
     return (
       <div className="space-y-4">
-        {renderRow(result.calculoAparaBr, true)}
-        {renderRow(result.calculoBparaA, false)}
+        {renderRow(result.calculoAparaBr)}
+        {renderRow(result.calculoBparaA)}
       </div>
     );
   };
+
+  if (loadingProject) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-3">
-            <ArrowLeftRight className="h-6 w-6 text-primary" />
-            Separação entre Edificações
-            <Badge variant="outline" className="text-xs font-mono">NTCB 09/2020</Badge>
-          </h1>
-          <p className="text-muted-foreground">
-            Isolamento de risco por radiação térmica
-          </p>
+        <div className="flex items-center gap-4">
+          {projectId && (
+            <Button variant="ghost" size="icon" onClick={() => navigate(`/app/projects/${projectId}`)}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+          )}
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-3">
+              <ArrowLeftRight className="h-6 w-6 text-primary" />
+              Separação entre Edificações
+              <Badge variant="outline" className="text-xs font-mono">NTCB 09/2020</Badge>
+            </h1>
+            <p className="text-muted-foreground">
+              {project ? (
+                <>Projeto: <span className="font-medium text-foreground">{project.data.projectName}</span></>
+              ) : (
+                'Isolamento de risco por radiação térmica'
+              )}
+            </p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleReset}>
             <RotateCcw className="h-4 w-4 mr-2" />
             Limpar
           </Button>
+          {projectId && (
+            <Button variant="outline" onClick={fetchProject}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Recarregar
+            </Button>
+          )}
           <Button variant="outline" onClick={handleExportCSV} disabled={calculations.every(c => !c.result)}>
             <Download className="h-4 w-4 mr-2" />
             Exportar
@@ -311,6 +419,22 @@ export default function SeparationCalculator() {
           </Button>
         </div>
       </div>
+
+      {/* Info do projeto */}
+      {project && (
+        <Alert>
+          <Building2 className="h-4 w-4" />
+          <AlertDescription>
+            Edificações carregadas dos setores do projeto. Você pode editar os valores ou adicionar novas edificações manualmente.
+            <br />
+            <span className="text-muted-foreground text-xs">
+              Área total: {project.data.totalArea?.toLocaleString()} m² | 
+              Altura: {project.data.totalHeight} m | 
+              {project.data.sectors?.length || 0} setor(es)
+            </span>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Configuração Global */}
       <Card>
@@ -350,7 +474,10 @@ export default function SeparationCalculator() {
             Edificações Cadastradas
           </CardTitle>
           <CardDescription>
-            Cadastre as edificações para realizar os cálculos de separação
+            {project 
+              ? 'Setores importados do projeto. Ajuste largura e altura das fachadas conforme necessário.'
+              : 'Cadastre as edificações para realizar os cálculos de separação'
+            }
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -362,6 +489,9 @@ export default function SeparationCalculator() {
                   <Building2 className="h-4 w-4 text-primary" />
                   <span className="font-medium">{building.name}</span>
                   <Badge variant="outline">Severidade {getSeverity(building.fireLoadMJm2, building.hasSprinklers)}</Badge>
+                  {building.fromSector && (
+                    <Badge variant="secondary" className="text-xs">Do projeto</Badge>
+                  )}
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => removeBuilding(building.id)}>
                   <Trash2 className="h-4 w-4 text-destructive" />
@@ -377,7 +507,7 @@ export default function SeparationCalculator() {
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Largura (m)</Label>
+                  <Label className="text-xs">Largura Fachada (m)</Label>
                   <Input
                     type="number"
                     value={building.width}
@@ -385,7 +515,7 @@ export default function SeparationCalculator() {
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Altura (m)</Label>
+                  <Label className="text-xs">Altura Fachada (m)</Label>
                   <Input
                     type="number"
                     value={building.height}
@@ -427,7 +557,7 @@ export default function SeparationCalculator() {
                 />
               </div>
               <div>
-                <Label className="text-xs">Largura (m)</Label>
+                <Label className="text-xs">Largura Fachada (m)</Label>
                 <Input
                   type="number"
                   value={newBuilding.width}
@@ -435,7 +565,7 @@ export default function SeparationCalculator() {
                 />
               </div>
               <div>
-                <Label className="text-xs">Altura (m)</Label>
+                <Label className="text-xs">Altura Fachada (m)</Label>
                 <Input
                   type="number"
                   value={newBuilding.height}
@@ -480,9 +610,6 @@ export default function SeparationCalculator() {
         </CardHeader>
         <CardContent className="space-y-4">
           {calculations.map(calc => {
-            const expositora = buildings.find(b => b.id === calc.expositoraId);
-            const emExposicao = buildings.find(b => b.id === calc.emExposicaoId);
-            
             return (
               <div key={calc.id} className="border rounded-lg overflow-hidden">
                 {/* Seleção de edificações */}

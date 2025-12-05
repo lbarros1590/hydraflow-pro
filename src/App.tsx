@@ -52,6 +52,7 @@ const App = () => (
               <Route path="projects/:id" element={<ProjectDetail />} />
               <Route path="projects/:id/edit" element={<ProjectWizard />} />
               <Route path="projects/:id/hydraulic" element={<HydraulicPage />} />
+              <Route path="projects/:id/separacao" element={<SeparationCalculator />} />
               <Route path="calculator" element={<StandaloneCalculator />} />
               <Route path="calculator/sprinkler" element={<SprinklerCalculator />} />
               <Route path="calculator/separacao" element={<SeparationCalculator />} />
