@@ -32,6 +32,7 @@ import {
   ChevronRight,
   Layers,
   LayoutGrid,
+  Save,
 } from 'lucide-react';
 import {
   Select,
@@ -102,10 +103,12 @@ export default function EmergencyExitCalculator() {
   const [results, setResults] = useState<Map<string, BuildingCalculationResult>>(new Map());
   const [expandedBuildings, setExpandedBuildings] = useState<Set<string>>(new Set());
   const [expandedFloors, setExpandedFloors] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [savedCalculationId, setSavedCalculationId] = useState<string | null>(null);
 
   useEffect(() => {
     if (projectId) {
-      fetchProject();
+      fetchProjectAndCalculation();
     } else {
       // Criar uma edificação de exemplo
       const exampleBuilding: EmergencyBuilding = {
@@ -145,30 +148,63 @@ export default function EmergencyExitCalculator() {
     }
   }, [projectId]);
 
-  const fetchProject = async () => {
+  const fetchProjectAndCalculation = async () => {
     try {
       setLoadingProject(true);
-      const { data, error } = await supabase
+      
+      // Buscar projeto
+      const { data: projectData, error: projectError } = await supabase
         .from('projects')
         .select('id, data')
         .eq('id', projectId)
         .maybeSingle();
 
-      if (error) throw error;
+      if (projectError) throw projectError;
 
-      if (data) {
-        setProject(data as Project);
-        const projectData = data.data as ProjectFormData;
+      if (projectData) {
+        setProject(projectData as Project);
+      }
+
+      // Buscar cálculo salvo
+      const { data: calcData, error: calcError } = await supabase
+        .from('emergency_exit_calculations')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (calcError) throw calcError;
+
+      if (calcData) {
+        // Carregar cálculo salvo
+        setSavedCalculationId(calcData.id);
+        const savedBuildings = (calcData.buildings as unknown as EmergencyBuilding[]) || [];
         
-        // Converter setores do projeto para estrutura de edificações
-        if (projectData.sectors && projectData.sectors.length > 0) {
+        setBuildings(savedBuildings);
+        if (savedBuildings.length > 0) {
+          setExpandedBuildings(new Set([savedBuildings[0].id]));
+          if (savedBuildings[0].floors.length > 0) {
+            setExpandedFloors(new Set([savedBuildings[0].floors[0].id]));
+          }
+        }
+        
+        toast({
+          title: 'Cálculo carregado',
+          description: `${savedBuildings.length} edificação(ões) com dados de saída de emergência`,
+        });
+      } else if (projectData) {
+        // Carregar setores do projeto
+        const pData = projectData.data as ProjectFormData;
+        if (pData.sectors && pData.sectors.length > 0) {
           const building: EmergencyBuilding = {
             id: createId(),
-            name: projectData.projectName || 'Edificação do Projeto',
+            name: pData.projectName || 'Edificação do Projeto',
             floors: [{
               id: createId(),
               name: 'Pavimento 01',
-              sectors: projectData.sectors.map(sector => ({
+              sectors: pData.sectors.map(sector => ({
                 id: sector.id,
                 name: sector.name,
                 occupancyCode: sector.occupancyCode || 'C-2',
@@ -184,19 +220,67 @@ export default function EmergencyExitCalculator() {
           
           toast({
             title: 'Setores carregados',
-            description: `${projectData.sectors.length} setor(es) importados do projeto. Adicione as portas existentes.`,
+            description: `${pData.sectors.length} setor(es) importados do projeto. Adicione as portas existentes.`,
           });
         }
       }
     } catch (error) {
-      console.error('Error fetching project:', error);
+      console.error('Error fetching data:', error);
       toast({
         title: 'Erro',
-        description: 'Não foi possível carregar o projeto',
+        description: 'Não foi possível carregar os dados',
         variant: 'destructive',
       });
     } finally {
       setLoadingProject(false);
+    }
+  };
+
+  const saveCalculation = async () => {
+    if (!projectId) {
+      toast({ title: 'Erro', description: 'Salvar só está disponível em projetos', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setSaving(true);
+      
+      const resultsObj: Record<string, BuildingCalculationResult> = {};
+      results.forEach((value, key) => {
+        resultsObj[key] = value;
+      });
+      
+      const dataToSave = {
+        project_id: projectId,
+        buildings: JSON.parse(JSON.stringify(buildings)),
+        results: JSON.parse(JSON.stringify(resultsObj)),
+        is_active: true,
+      };
+
+      if (savedCalculationId) {
+        const { error } = await supabase
+          .from('emergency_exit_calculations')
+          .update(dataToSave)
+          .eq('id', savedCalculationId);
+        
+        if (error) throw error;
+        toast({ title: 'Cálculo atualizado' });
+      } else {
+        const { data: newCalc, error } = await supabase
+          .from('emergency_exit_calculations')
+          .insert([dataToSave])
+          .select('id')
+          .single();
+        
+        if (error) throw error;
+        setSavedCalculationId(newCalc.id);
+        toast({ title: 'Cálculo salvo' });
+      }
+    } catch (error) {
+      console.error('Error saving:', error);
+      toast({ title: 'Erro ao salvar', variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -671,6 +755,18 @@ export default function EmergencyExitCalculator() {
             <Plus className="h-4 w-4 mr-2" />
             Nova Edificação
           </Button>
+          {projectId && (
+            <>
+              <Button variant="outline" onClick={fetchProjectAndCalculation}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Recarregar
+              </Button>
+              <Button variant="outline" onClick={saveCalculation} disabled={saving}>
+                <Save className="h-4 w-4 mr-2" />
+                {saving ? 'Salvando...' : savedCalculationId ? 'Atualizar' : 'Salvar'}
+              </Button>
+            </>
+          )}
           <Button onClick={calculateAll} disabled={buildings.length === 0}>
             <Calculator className="h-4 w-4 mr-2" />
             Calcular Todos
