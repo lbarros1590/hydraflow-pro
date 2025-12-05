@@ -30,6 +30,8 @@ import {
 import type { ProjectFormData, ProjectStatus } from '@/components/Wizard/types';
 import { FileManager } from '@/components/ProjectFiles/FileManager';
 import { ShareProjectDialog } from '@/components/Sharing/ShareProjectDialog';
+import { EmergencyExitResults } from '@/components/Project/EmergencyExitResults';
+import { SeparationResults } from '@/components/Project/SeparationResults';
 
 interface Project {
   id: string;
@@ -171,8 +173,9 @@ export default function ProjectDetail() {
 
       {/* Tabs for different sections */}
       <Tabs defaultValue="info" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="info">Informações</TabsTrigger>
+          <TabsTrigger value="calculations">Cálculos</TabsTrigger>
           <TabsTrigger value="files" className="gap-2">
             <FolderOpen className="w-4 h-4" />
             Arquivos
@@ -315,6 +318,19 @@ export default function ProjectDetail() {
               </Card>
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="calculations" className="mt-6 space-y-6">
+          <EmergencyExitResults 
+            buildings={data.buildings || []} 
+            projectName={data.projectName} 
+          />
+          <SeparationResults 
+            buildings={data.buildings || []} 
+            projectName={data.projectName}
+            actualDistance={data.actualSeparationDistance}
+            hasFireDepartment={data.hasFireDepartment}
+          />
         </TabsContent>
 
         <TabsContent value="files" className="mt-6">
