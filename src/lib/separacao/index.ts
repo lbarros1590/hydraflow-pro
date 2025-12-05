@@ -7,7 +7,29 @@
 export * from './types';
 
 // Tabelas normativas
-export * from './tables';
+export {
+  X_VALUES,
+  Y_VALUES,
+  TABLE_A1,
+  TABLE_SEVERITY,
+  TABLE_3,
+  TABLE_4,
+  TABLE_A2,
+  FIRE_LOAD_TABLE,
+  getClosestX,
+  getClosestY,
+  getTable3OpeningRange,
+  getTable3Floors,
+  getFireLoadByOccupancy,
+  getOccupancyGroups,
+  getOccupanciesByGroup,
+  getSeverityFromFireLoad,
+  getSeverityDescription,
+  type FireLoadByOccupancy,
+  type TRRFCategory,
+  type ProtectionType,
+  type ReducerRule,
+} from './tables';
 
 // Motor de cálculo
 export {

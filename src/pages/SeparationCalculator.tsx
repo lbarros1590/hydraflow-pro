@@ -51,6 +51,10 @@ import {
   determineSeverity,
   openReportForPrint,
   downloadReportHTML,
+  FIRE_LOAD_TABLE,
+  getFireLoadByOccupancy,
+  getSeverityFromFireLoad,
+  getSeverityDescription,
   type SimpleBuildingData,
   type SimpleCalculationInput,
   type SeparationCalculationResult,
@@ -60,6 +64,8 @@ import {
 interface RegisteredBuilding extends SimpleBuildingData {
   fromSector?: boolean;
   sectorId?: string;
+  occupancyCode?: string;
+  autoFireLoad?: boolean; // Se true, usa carga da ocupação
 }
 
 interface CalculationPair {
@@ -91,6 +97,8 @@ const defaultBuilding: RegisteredBuilding = {
   trrf: 60,
   numberOfFloors: 1,
   totalArea: 200,
+  occupancyCode: '',
+  autoFireLoad: false,
 };
 
 export default function SeparationCalculator() {
@@ -516,6 +524,59 @@ export default function SeparationCalculator() {
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="p-4 space-y-4">
+                    {/* Carga de Incêndio Automática - NTCB 07 */}
+                    <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Switch
+                          checked={building.autoFireLoad || false}
+                          onCheckedChange={v => {
+                            if (v && building.occupancyCode) {
+                              const fireLoad = getFireLoadByOccupancy(building.occupancyCode);
+                              if (fireLoad) {
+                                updateBuilding(building.id, 'fireLoadMJm2', fireLoad.fireLoadMJm2);
+                              }
+                            }
+                            updateBuilding(building.id, 'autoFireLoad', v);
+                          }}
+                        />
+                        <Label className="text-sm font-medium">Calcular carga de incêndio pela ocupação (NTCB 07)</Label>
+                      </div>
+                      {building.autoFireLoad && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="md:col-span-2">
+                            <Label className="text-xs">Ocupação (NTCB 07/2020)</Label>
+                            <Select
+                              value={building.occupancyCode || ''}
+                              onValueChange={code => {
+                                const fireLoad = getFireLoadByOccupancy(code);
+                                updateBuilding(building.id, 'occupancyCode', code);
+                                if (fireLoad) {
+                                  updateBuilding(building.id, 'fireLoadMJm2', fireLoad.fireLoadMJm2);
+                                }
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione a ocupação" />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[300px]">
+                                {FIRE_LOAD_TABLE.map(occ => (
+                                  <SelectItem key={occ.code} value={occ.code}>
+                                    {occ.code} - {occ.description} ({occ.fireLoadMJm2} MJ/m²)
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Severidade</Label>
+                            <div className="h-10 flex items-center px-3 bg-muted rounded-md text-sm font-mono">
+                              {getSeverityFromFireLoad(building.fireLoadMJm2)} - {getSeverityDescription(getSeverityFromFireLoad(building.fireLoadMJm2))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                       <div>
                         <Label className="text-xs">Nome/Identificação</Label>
@@ -557,6 +618,8 @@ export default function SeparationCalculator() {
                           type="number"
                           value={building.fireLoadMJm2}
                           onChange={e => updateBuilding(building.id, 'fireLoadMJm2', parseFloat(e.target.value) || 0)}
+                          disabled={building.autoFireLoad}
+                          className={building.autoFireLoad ? 'bg-muted' : ''}
                         />
                       </div>
                       <div>
@@ -592,6 +655,62 @@ export default function SeparationCalculator() {
           {/* Nova Edificação */}
           <div className="p-4 border-2 border-dashed rounded-lg space-y-3">
             <p className="font-medium text-sm text-muted-foreground">Nova Edificação</p>
+            
+            {/* Ocupação NTCB 07 */}
+            <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+              <div className="flex items-center gap-2 mb-3">
+                <Switch
+                  checked={newBuilding.autoFireLoad || false}
+                  onCheckedChange={v => {
+                    if (v && newBuilding.occupancyCode) {
+                      const fireLoad = getFireLoadByOccupancy(newBuilding.occupancyCode);
+                      if (fireLoad) {
+                        setNewBuilding(prev => ({ ...prev, fireLoadMJm2: fireLoad.fireLoadMJm2, autoFireLoad: v }));
+                        return;
+                      }
+                    }
+                    setNewBuilding(prev => ({ ...prev, autoFireLoad: v }));
+                  }}
+                />
+                <Label className="text-sm">Usar carga de incêndio da ocupação (NTCB 07)</Label>
+              </div>
+              {newBuilding.autoFireLoad && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Ocupação</Label>
+                    <Select
+                      value={newBuilding.occupancyCode || ''}
+                      onValueChange={code => {
+                        const fireLoad = getFireLoadByOccupancy(code);
+                        setNewBuilding(prev => ({
+                          ...prev,
+                          occupancyCode: code,
+                          fireLoadMJm2: fireLoad?.fireLoadMJm2 || prev.fireLoadMJm2,
+                        }));
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a ocupação" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        {FIRE_LOAD_TABLE.map(occ => (
+                          <SelectItem key={occ.code} value={occ.code}>
+                            {occ.code} - {occ.description} ({occ.fireLoadMJm2} MJ/m²)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Severidade Calculada</Label>
+                    <div className="h-10 flex items-center px-3 bg-muted rounded-md text-sm font-mono">
+                      {getSeverityFromFireLoad(newBuilding.fireLoadMJm2)}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
               <div>
                 <Label className="text-xs">Nome</Label>
@@ -634,6 +753,8 @@ export default function SeparationCalculator() {
                   type="number"
                   value={newBuilding.fireLoadMJm2}
                   onChange={e => setNewBuilding(prev => ({ ...prev, fireLoadMJm2: parseFloat(e.target.value) || 0 }))}
+                  disabled={newBuilding.autoFireLoad}
+                  className={newBuilding.autoFireLoad ? 'bg-muted' : ''}
                 />
               </div>
               <div className="flex items-end">
