@@ -60,13 +60,142 @@ export const TABLE_A1: Record<'I' | 'II' | 'III', Record<number, Record<number, 
 };
 
 // ===========================================
-// TABELA 2 - Severidade da carga de incêndio
+// TABELA 2 - Severidade da carga de incêndio (NTCB 07/2020)
 // ===========================================
 export const TABLE_SEVERITY = {
-  I: { min: 0, max: 680 },
-  II: { min: 681, max: 1460 },
-  III: { min: 1461, max: Infinity },
+  I: { min: 0, max: 680, description: 'Baixa (até 680 MJ/m²)' },
+  II: { min: 681, max: 1460, description: 'Média (681 a 1460 MJ/m²)' },
+  III: { min: 1461, max: Infinity, description: 'Alta (acima de 1460 MJ/m²)' },
 };
+
+// ===========================================
+// CARGA DE INCÊNDIO POR OCUPAÇÃO (NTCB 07/2020 - Tabela A.1)
+// ===========================================
+export interface FireLoadByOccupancy {
+  code: string;
+  group: string;
+  description: string;
+  fireLoadMJm2: number;
+  riskClass: 'baixo' | 'medio' | 'alto';
+}
+
+export const FIRE_LOAD_TABLE: FireLoadByOccupancy[] = [
+  // GRUPO A - RESIDENCIAL
+  { code: 'A-1', group: 'Residencial', description: 'Habitação unifamiliar', fireLoadMJm2: 300, riskClass: 'baixo' },
+  { code: 'A-2', group: 'Residencial', description: 'Habitação multifamiliar', fireLoadMJm2: 300, riskClass: 'baixo' },
+  { code: 'A-3', group: 'Residencial', description: 'Habitação coletiva', fireLoadMJm2: 400, riskClass: 'medio' },
+  
+  // GRUPO B - HOSPEDAGEM
+  { code: 'B-1', group: 'Hospedagem', description: 'Hotel', fireLoadMJm2: 500, riskClass: 'medio' },
+  { code: 'B-2', group: 'Hospedagem', description: 'Hotel residencial', fireLoadMJm2: 400, riskClass: 'medio' },
+  
+  // GRUPO C - COMERCIAL
+  { code: 'C-1', group: 'Comercial', description: 'Comércio baixa carga', fireLoadMJm2: 200, riskClass: 'baixo' },
+  { code: 'C-2', group: 'Comercial', description: 'Comércio em geral', fireLoadMJm2: 600, riskClass: 'medio' },
+  { code: 'C-3', group: 'Comercial', description: 'Shopping centers', fireLoadMJm2: 800, riskClass: 'medio' },
+  
+  // GRUPO D - SERVIÇOS
+  { code: 'D-1', group: 'Serviços', description: 'Escritórios', fireLoadMJm2: 700, riskClass: 'medio' },
+  { code: 'D-2', group: 'Serviços', description: 'Agências bancárias', fireLoadMJm2: 300, riskClass: 'baixo' },
+  { code: 'D-3', group: 'Serviços', description: 'Serviços de reparação', fireLoadMJm2: 500, riskClass: 'medio' },
+  { code: 'D-4', group: 'Serviços', description: 'Laboratórios', fireLoadMJm2: 500, riskClass: 'medio' },
+  
+  // GRUPO E - EDUCACIONAL
+  { code: 'E-1', group: 'Educacional', description: 'Escolas', fireLoadMJm2: 300, riskClass: 'baixo' },
+  { code: 'E-2', group: 'Educacional', description: 'Escolas especiais', fireLoadMJm2: 300, riskClass: 'baixo' },
+  { code: 'E-3', group: 'Educacional', description: 'Academias', fireLoadMJm2: 200, riskClass: 'baixo' },
+  { code: 'E-4', group: 'Educacional', description: 'Centros de treinamento', fireLoadMJm2: 400, riskClass: 'medio' },
+  { code: 'E-5', group: 'Educacional', description: 'Pré-escolas', fireLoadMJm2: 300, riskClass: 'baixo' },
+  { code: 'E-6', group: 'Educacional', description: 'Escolas especiais', fireLoadMJm2: 300, riskClass: 'baixo' },
+  
+  // GRUPO F - REUNIÃO DE PÚBLICO
+  { code: 'F-1', group: 'Reunião Público', description: 'Museus/bibliotecas', fireLoadMJm2: 500, riskClass: 'medio' },
+  { code: 'F-2', group: 'Reunião Público', description: 'Igrejas/velórios', fireLoadMJm2: 300, riskClass: 'baixo' },
+  { code: 'F-3', group: 'Reunião Público', description: 'Centros esportivos', fireLoadMJm2: 200, riskClass: 'baixo' },
+  { code: 'F-4', group: 'Reunião Público', description: 'Estações/terminais', fireLoadMJm2: 300, riskClass: 'baixo' },
+  { code: 'F-5', group: 'Reunião Público', description: 'Teatros/cinemas', fireLoadMJm2: 400, riskClass: 'medio' },
+  { code: 'F-6', group: 'Reunião Público', description: 'Clubes sociais', fireLoadMJm2: 400, riskClass: 'medio' },
+  { code: 'F-7', group: 'Reunião Público', description: 'Construções provisórias', fireLoadMJm2: 200, riskClass: 'baixo' },
+  { code: 'F-8', group: 'Reunião Público', description: 'Restaurantes', fireLoadMJm2: 300, riskClass: 'baixo' },
+  { code: 'F-9', group: 'Reunião Público', description: 'Recreação pública', fireLoadMJm2: 200, riskClass: 'baixo' },
+  { code: 'F-10', group: 'Reunião Público', description: 'Exposições', fireLoadMJm2: 300, riskClass: 'baixo' },
+  { code: 'F-11', group: 'Reunião Público', description: 'Boates', fireLoadMJm2: 400, riskClass: 'medio' },
+  
+  // GRUPO G - AUTOMOTIVOS
+  { code: 'G-1', group: 'Automotivo', description: 'Garagem automática', fireLoadMJm2: 200, riskClass: 'baixo' },
+  { code: 'G-2', group: 'Automotivo', description: 'Garagem coletiva', fireLoadMJm2: 200, riskClass: 'baixo' },
+  { code: 'G-3', group: 'Automotivo', description: 'Postos de combustível', fireLoadMJm2: 800, riskClass: 'alto' },
+  { code: 'G-4', group: 'Automotivo', description: 'Oficinas mecânicas', fireLoadMJm2: 500, riskClass: 'medio' },
+  { code: 'G-5', group: 'Automotivo', description: 'Hangares', fireLoadMJm2: 800, riskClass: 'alto' },
+  
+  // GRUPO H - SAÚDE
+  { code: 'H-1', group: 'Saúde', description: 'Veterinário', fireLoadMJm2: 300, riskClass: 'baixo' },
+  { code: 'H-2', group: 'Saúde', description: 'Asilos', fireLoadMJm2: 300, riskClass: 'baixo' },
+  { code: 'H-3', group: 'Saúde', description: 'Hospitais', fireLoadMJm2: 300, riskClass: 'baixo' },
+  { code: 'H-4', group: 'Saúde', description: 'Edificações públicas', fireLoadMJm2: 400, riskClass: 'medio' },
+  { code: 'H-5', group: 'Saúde', description: 'Prisões', fireLoadMJm2: 300, riskClass: 'baixo' },
+  { code: 'H-6', group: 'Saúde', description: 'Clínicas', fireLoadMJm2: 300, riskClass: 'baixo' },
+  
+  // GRUPO I - INDUSTRIAL
+  { code: 'I-1', group: 'Industrial', description: 'Industrial baixo', fireLoadMJm2: 200, riskClass: 'baixo' },
+  { code: 'I-2', group: 'Industrial', description: 'Industrial médio', fireLoadMJm2: 800, riskClass: 'medio' },
+  { code: 'I-3', group: 'Industrial', description: 'Industrial alto', fireLoadMJm2: 2000, riskClass: 'alto' },
+  
+  // GRUPO J - DEPÓSITOS
+  { code: 'J-1', group: 'Depósitos', description: 'Depósito incombustível', fireLoadMJm2: 50, riskClass: 'baixo' },
+  { code: 'J-2', group: 'Depósitos', description: 'Depósito baixa carga', fireLoadMJm2: 200, riskClass: 'baixo' },
+  { code: 'J-3', group: 'Depósitos', description: 'Depósito média carga', fireLoadMJm2: 800, riskClass: 'medio' },
+  { code: 'J-4', group: 'Depósitos', description: 'Depósito alta carga', fireLoadMJm2: 2000, riskClass: 'alto' },
+  
+  // GRUPO L - EXPLOSIVOS
+  { code: 'L-1', group: 'Explosivos', description: 'Comércio explosivos', fireLoadMJm2: 500, riskClass: 'alto' },
+  { code: 'L-2', group: 'Explosivos', description: 'Indústria explosivos', fireLoadMJm2: 1000, riskClass: 'alto' },
+  { code: 'L-3', group: 'Explosivos', description: 'Depósito explosivos', fireLoadMJm2: 1000, riskClass: 'alto' },
+  
+  // GRUPO M - ESPECIAIS
+  { code: 'M-1', group: 'Especiais', description: 'Túneis', fireLoadMJm2: 300, riskClass: 'medio' },
+  { code: 'M-3', group: 'Especiais', description: 'Central telefônica', fireLoadMJm2: 600, riskClass: 'medio' },
+  { code: 'M-4', group: 'Especiais', description: 'Em construção', fireLoadMJm2: 500, riskClass: 'medio' },
+  { code: 'M-5', group: 'Especiais', description: 'Silos', fireLoadMJm2: 800, riskClass: 'alto' },
+  { code: 'M-8', group: 'Especiais', description: 'Parques eólicos/solares', fireLoadMJm2: 100, riskClass: 'baixo' },
+];
+
+/**
+ * Obtém a carga de incêndio pela ocupação
+ */
+export function getFireLoadByOccupancy(code: string): FireLoadByOccupancy | undefined {
+  return FIRE_LOAD_TABLE.find(f => f.code === code);
+}
+
+/**
+ * Obtém todos os grupos de ocupação únicos
+ */
+export function getOccupancyGroups(): string[] {
+  return [...new Set(FIRE_LOAD_TABLE.map(f => f.group))];
+}
+
+/**
+ * Obtém ocupações por grupo
+ */
+export function getOccupanciesByGroup(group: string): FireLoadByOccupancy[] {
+  return FIRE_LOAD_TABLE.filter(f => f.group === group);
+}
+
+/**
+ * Determina a severidade baseada na carga de incêndio (Tabela 2)
+ */
+export function getSeverityFromFireLoad(fireLoadMJm2: number): 'I' | 'II' | 'III' {
+  if (fireLoadMJm2 <= TABLE_SEVERITY.I.max) return 'I';
+  if (fireLoadMJm2 <= TABLE_SEVERITY.II.max) return 'II';
+  return 'III';
+}
+
+/**
+ * Obtém a descrição da severidade
+ */
+export function getSeverityDescription(severity: 'I' | 'II' | 'III'): string {
+  return TABLE_SEVERITY[severity].description;
+}
 
 // ===========================================
 // TABELA 3 - Edificações até 12m e 750m²
