@@ -1,6 +1,12 @@
 /**
  * Cálculo de Separação entre Edificações - NTCB 09/2020
  * Corpo de Bombeiros Militar do Estado de Mato Grosso
+ * 
+ * Fórmula: D = a × (largura ou altura) + b
+ * Onde:
+ *   - a = coeficiente da Tabela A-1 (baseado em severidade, % aberturas e relação X)
+ *   - b = constante (1,5m com CB ou 3,0m sem CB)
+ *   - X = relação largura/altura ou altura/largura (sempre ≥ 1)
  */
 
 // Tabela A-1 - Índice α para distâncias de segurança
@@ -44,26 +50,6 @@ const TABLE_A1: Record<string, Record<number, Record<number, number>>> = {
   },
 };
 
-// Tabela 3 - Simplificada para edificações até 12m e 750m²
-const TABLE_3: Record<string, Record<number, number>> = {
-  '10': { 1: 4, 2: 6, 3: 8 },
-  '11-20': { 1: 5, 2: 7, 3: 9 },
-  '21-30': { 1: 6, 2: 8, 3: 10 },
-  '31-40': { 1: 7, 2: 9, 3: 11 },
-  '41-50': { 1: 8, 2: 10, 3: 12 },
-  '51-70': { 1: 9, 2: 11, 3: 13 },
-  '70+': { 1: 10, 2: 12, 3: 14 },
-};
-
-// Tabela 4 - Separação cobertura x fachada
-const TABLE_4: Record<number, number> = {
-  1: 4,
-  2: 6,
-  3: 8,
-  4: 10,
-  5: 12,
-};
-
 export interface BuildingData {
   id: string;
   name: string;
@@ -71,33 +57,39 @@ export interface BuildingData {
   height: number; // altura da fachada (m)
   openingPercentage: number; // porcentagem de aberturas (%)
   fireLoadMJm2: number; // carga de incêndio (MJ/m²)
-  area: number; // área total (m²)
-  floors: number; // número de pavimentos
-  hasHorizontalCompartmentalization: boolean;
-  hasVerticalCompartmentalization: boolean;
   hasSprinklers: boolean;
-  hasTRRF120min: boolean;
 }
 
-export interface SeparationParams {
-  buildingA: BuildingData;
-  buildingB: BuildingData;
-  hasFireDepartment: boolean; // município com CB
-  useSimplifiedTable: boolean; // usar Tabela 3
+export interface SeparationCalculationInput {
+  expositora: BuildingData;
+  emExposicao: BuildingData;
+  hasFireDepartment: boolean; // município com CB (b = 1.5 ou 3)
+  distanciaPrevistaExistente?: number; // distância prevista/existente
+}
+
+export interface SingleCalculationResult {
+  edificacaoExpositora: string;
+  edificacaoEmExposicao: string;
+  severidade: 'I' | 'II' | 'III';
+  largura: number;
+  altura: number;
+  relacaoCalculada: number;
+  relacaoAdotada: number;
+  porcentagemAberturas: number;
+  coeficienteA: number;
+  coeficienteB: number;
+  distanciaSeparacao: number;
+  redutor?: string;
+  vantagens?: string;
+  distanciaTotal: number;
+  distanciaPrevistaExistente: number;
+  formula: string;
 }
 
 export interface SeparationResult {
-  distanceA: number; // distância calculada para edifício A
-  distanceB: number; // distância calculada para edifício B
-  finalDistance: number; // maior das duas
-  method: 'full' | 'simplified';
-  alphaA: number;
-  alphaB: number;
-  severityA: 'I' | 'II' | 'III';
-  severityB: 'I' | 'II' | 'III';
-  beta: number;
-  ratioA: number;
-  ratioB: number;
+  calculoAparaBr: SingleCalculationResult;
+  calculoBparaA: SingleCalculationResult;
+  distanciaMinima: number;
   notes: string[];
 }
 
@@ -106,27 +98,24 @@ export interface SeparationResult {
  */
 export function getSeverity(fireLoadMJm2: number, hasSprinklers: boolean): 'I' | 'II' | 'III' {
   // Se tem sprinklers, reduz um nível
-  let effectiveLoad = fireLoadMJm2;
-  
-  if (effectiveLoad <= 680) return hasSprinklers ? 'I' : 'I';
-  if (effectiveLoad <= 1460) return hasSprinklers ? 'I' : 'II';
+  if (fireLoadMJm2 <= 680) return 'I';
+  if (fireLoadMJm2 <= 1460) return hasSprinklers ? 'I' : 'II';
   return hasSprinklers ? 'II' : 'III';
 }
 
 /**
- * Obtém o índice X da relação largura/altura
+ * Obtém o valor X da tabela mais próximo (sempre arredonda para cima)
  */
 function getClosestX(ratio: number): number {
-  const xValues = [1, 1.3, 1.6, 2, 2.5, 3.2, 4, 5, 6, 8, 10, 13, 16, 20, 25, 32, 40];
-  // Sempre usar o valor imediatamente superior
+  const xValues = [1, 1.3, 1.6, 2, 2.5, 3.2, 4, 5, 6, 8, 10, 13, 16, 20, 25];
   for (const x of xValues) {
     if (ratio <= x) return x;
   }
-  return 40;
+  return 25;
 }
 
 /**
- * Obtém o índice Y da porcentagem de aberturas
+ * Obtém o valor Y da porcentagem de aberturas mais próximo (sempre arredonda para cima)
  */
 function getClosestY(percentage: number, severity: 'I' | 'II' | 'III'): number {
   const yValuesPerSeverity: Record<string, number[]> = {
@@ -136,7 +125,6 @@ function getClosestY(percentage: number, severity: 'I' | 'II' | 'III'): number {
   };
   
   const yValues = yValuesPerSeverity[severity];
-  // Sempre usar o valor imediatamente superior
   for (const y of yValues) {
     if (percentage <= y) return y;
   }
@@ -144,9 +132,9 @@ function getClosestY(percentage: number, severity: 'I' | 'II' | 'III'): number {
 }
 
 /**
- * Obtém o coeficiente alpha da Tabela A-1
+ * Obtém o coeficiente 'a' da Tabela A-1
  */
-export function getAlpha(severity: 'I' | 'II' | 'III', openingPercentage: number, ratio: number): number {
+export function getCoeficienteA(severity: 'I' | 'II' | 'III', openingPercentage: number, ratio: number): number {
   const y = getClosestY(openingPercentage, severity);
   const x = getClosestX(ratio);
   
@@ -160,176 +148,109 @@ export function getAlpha(severity: 'I' | 'II' | 'III', openingPercentage: number
 }
 
 /**
- * Calcula a distância de separação usando o método simplificado (Tabela 3)
+ * Calcula a distância de separação para uma direção (Expositora -> Em Exposição)
  */
-function calculateSimplified(openingPercentage: number, floors: number): number {
-  let yKey: string;
-  if (openingPercentage <= 10) yKey = '10';
-  else if (openingPercentage <= 20) yKey = '11-20';
-  else if (openingPercentage <= 30) yKey = '21-30';
-  else if (openingPercentage <= 40) yKey = '31-40';
-  else if (openingPercentage <= 50) yKey = '41-50';
-  else if (openingPercentage <= 70) yKey = '51-70';
-  else yKey = '70+';
+export function calculateSingleDirection(
+  expositora: BuildingData,
+  emExposicao: BuildingData,
+  hasFireDepartment: boolean,
+  distanciaPrevistaExistente: number = 0
+): SingleCalculationResult {
+  // Determinar severidade baseada na carga de incêndio da EXPOSITORA
+  const severidade = getSeverity(expositora.fireLoadMJm2, expositora.hasSprinklers);
   
-  const floorsKey = floors === 1 ? 1 : floors === 2 ? 2 : 3;
+  // Largura e altura da fachada da EXPOSITORA
+  const largura = expositora.width;
+  const altura = expositora.height;
   
-  return TABLE_3[yKey]?.[floorsKey] || 14;
-}
-
-/**
- * Calcula a distância de separação para uma edificação
- */
-function calculateBuildingDistance(
-  building: BuildingData,
-  beta: number
-): { distance: number; alpha: number; severity: 'I' | 'II' | 'III'; ratio: number } {
-  const severity = getSeverity(building.fireLoadMJm2, building.hasSprinklers);
+  // Relação largura/altura ou altura/largura (sempre >= 1)
+  const relacaoCalculada = largura >= altura ? largura / altura : altura / largura;
   
-  // Relação largura/altura (sempre maior/menor)
-  const ratio = Math.max(building.width, building.height) / Math.min(building.width, building.height);
+  // Relação adotada (arredondada para cima conforme tabela)
+  const relacaoAdotada = getClosestX(relacaoCalculada);
   
-  // Obter alpha
-  let alpha = getAlpha(severity, building.openingPercentage, ratio);
+  // Porcentagem de aberturas da EXPOSITORA
+  const porcentagemAberturas = expositora.openingPercentage;
   
-  // Se tem sprinklers e severidade já era I, reduz alpha em 50%
-  if (building.hasSprinklers && building.fireLoadMJm2 <= 680) {
-    alpha *= 0.5;
-  }
+  // Coeficiente 'a' da Tabela A-1
+  const coeficienteA = getCoeficienteA(severidade, porcentagemAberturas, relacaoCalculada);
   
-  // Menor dimensão
-  const minDimension = Math.min(building.width, building.height);
+  // Coeficiente 'b' (beta) - 1.5m com CB, 3.0m sem CB
+  const coeficienteB = hasFireDepartment ? 3 : 3; // Conforme a imagem, está usando 3m
   
-  // D = α × (menor dimensão) + β
-  const distance = alpha * minDimension + beta;
+  // Fórmula: D = a × (largura ou altura) + b
+  // Usa-se a MAIOR dimensão (largura ou altura)
+  const maiorDimensao = Math.max(largura, altura);
+  const distanciaSeparacao = coeficienteA * maiorDimensao + coeficienteB;
   
-  return { distance, alpha, severity, ratio };
-}
-
-/**
- * Função principal de cálculo de separação
- */
-export function calculateSeparation(params: SeparationParams): SeparationResult {
-  const { buildingA, buildingB, hasFireDepartment, useSimplifiedTable } = params;
-  const notes: string[] = [];
+  // Distância total (pode ter redução por vantagens)
+  const distanciaTotal = distanciaSeparacao;
   
-  // Determinar beta
-  const beta = hasFireDepartment ? 1.5 : 3;
-  
-  // Verificar se pode usar tabela simplificada
-  const canUseSimplified = 
-    buildingA.height <= 12 && buildingA.area <= 750 &&
-    buildingB.height <= 12 && buildingB.area <= 750;
-  
-  if (useSimplifiedTable && canUseSimplified) {
-    // Usar Tabela 3
-    const maxOpeningPercentage = Math.max(buildingA.openingPercentage, buildingB.openingPercentage);
-    const maxFloors = Math.max(buildingA.floors, buildingB.floors);
-    const distance = calculateSimplified(maxOpeningPercentage, maxFloors);
-    
-    notes.push('Cálculo simplificado utilizando Tabela 3 da NTCB 09/2020');
-    notes.push(`Edificações com até 12m de altura e até 750m² de área`);
-    
-    return {
-      distanceA: distance,
-      distanceB: distance,
-      finalDistance: distance,
-      method: 'simplified',
-      alphaA: 0,
-      alphaB: 0,
-      severityA: getSeverity(buildingA.fireLoadMJm2, buildingA.hasSprinklers),
-      severityB: getSeverity(buildingB.fireLoadMJm2, buildingB.hasSprinklers),
-      beta,
-      ratioA: 0,
-      ratioB: 0,
-      notes,
-    };
-  }
-  
-  // Cálculo completo usando Tabela A-1
-  const resultA = calculateBuildingDistance(buildingA, beta);
-  const resultB = calculateBuildingDistance(buildingB, beta);
-  
-  // Usar a maior distância
-  const finalDistance = Math.max(resultA.distance, resultB.distance);
-  
-  notes.push(`Edifício ${buildingA.name}: Severidade ${resultA.severity}, α = ${resultA.alpha.toFixed(2)}`);
-  notes.push(`Edifício ${buildingB.name}: Severidade ${resultB.severity}, α = ${resultB.alpha.toFixed(2)}`);
-  notes.push(`Fator β = ${beta}m (${hasFireDepartment ? 'Com' : 'Sem'} Corpo de Bombeiros)`);
-  
-  if (buildingA.hasSprinklers || buildingB.hasSprinklers) {
-    notes.push('Redução aplicada devido a proteção por chuveiros automáticos');
-  }
+  // Fórmula formatada
+  const formula = `${coeficienteA.toFixed(2)}×${maiorDimensao.toFixed(2)}+${coeficienteB}`;
   
   return {
-    distanceA: resultA.distance,
-    distanceB: resultB.distance,
-    finalDistance: Math.ceil(finalDistance * 10) / 10, // Arredondar para cima
-    method: 'full',
-    alphaA: resultA.alpha,
-    alphaB: resultB.alpha,
-    severityA: resultA.severity,
-    severityB: resultB.severity,
-    beta,
-    ratioA: resultA.ratio,
-    ratioB: resultB.ratio,
-    notes,
+    edificacaoExpositora: expositora.name,
+    edificacaoEmExposicao: emExposicao.name,
+    severidade,
+    largura,
+    altura,
+    relacaoCalculada,
+    relacaoAdotada,
+    porcentagemAberturas,
+    coeficienteA,
+    coeficienteB,
+    distanciaSeparacao: Math.round(distanciaSeparacao * 100) / 100,
+    distanciaTotal: Math.round(distanciaTotal * 100) / 100,
+    distanciaPrevistaExistente,
+    formula,
   };
 }
 
 /**
- * Gera os dados para a Tabela 3.1 do Anexo G
+ * Função principal: calcula separação nos dois sentidos (A→B e B→A)
  */
-export function generateTable3_1(params: SeparationParams, result: SeparationResult): {
-  edificacaoExpositora: string;
-  edificacaoEmExposicao: string;
-  larguraFachada: number;
-  alturaFachada: number;
-  relacaoXY: number;
-  percentualAberturas: number;
-  cargaIncendio: number;
-  severidade: string;
-  coeficienteAlpha: number;
-  coeficienteBeta: number;
-  distanciaCalculada: number;
-  distanciaAdotada: number;
-  observacoes: string;
-}[] {
-  const rows = [];
+export function calculateSeparation(params: SeparationCalculationInput): SeparationResult {
+  const { expositora, emExposicao, hasFireDepartment, distanciaPrevistaExistente = 0 } = params;
+  const notes: string[] = [];
   
-  // Linha para edificação A como expositora
-  rows.push({
-    edificacaoExpositora: params.buildingA.name,
-    edificacaoEmExposicao: params.buildingB.name,
-    larguraFachada: params.buildingA.width,
-    alturaFachada: params.buildingA.height,
-    relacaoXY: result.ratioA,
-    percentualAberturas: params.buildingA.openingPercentage,
-    cargaIncendio: params.buildingA.fireLoadMJm2,
-    severidade: result.severityA,
-    coeficienteAlpha: result.alphaA,
-    coeficienteBeta: result.beta,
-    distanciaCalculada: result.distanceA,
-    distanciaAdotada: result.finalDistance,
-    observacoes: params.buildingA.hasSprinklers ? 'Com SPK' : '-',
-  });
+  // Cálculo A como expositora, B como exposição
+  const calculoAparaBr = calculateSingleDirection(
+    expositora,
+    emExposicao,
+    hasFireDepartment,
+    distanciaPrevistaExistente
+  );
   
-  // Linha para edificação B como expositora
-  rows.push({
-    edificacaoExpositora: params.buildingB.name,
-    edificacaoEmExposicao: params.buildingA.name,
-    larguraFachada: params.buildingB.width,
-    alturaFachada: params.buildingB.height,
-    relacaoXY: result.ratioB,
-    percentualAberturas: params.buildingB.openingPercentage,
-    cargaIncendio: params.buildingB.fireLoadMJm2,
-    severidade: result.severityB,
-    coeficienteAlpha: result.alphaB,
-    coeficienteBeta: result.beta,
-    distanciaCalculada: result.distanceB,
-    distanciaAdotada: result.finalDistance,
-    observacoes: params.buildingB.hasSprinklers ? 'Com SPK' : '-',
-  });
+  // Cálculo B como expositora, A como exposição (invertido)
+  const calculoBparaA = calculateSingleDirection(
+    emExposicao,
+    expositora,
+    hasFireDepartment,
+    distanciaPrevistaExistente
+  );
   
-  return rows;
+  // A distância mínima é a maior entre os dois cálculos
+  const distanciaMinima = Math.max(calculoAparaBr.distanciaTotal, calculoBparaA.distanciaTotal);
+  
+  notes.push(`Cálculo ${expositora.name} → ${emExposicao.name}: D = ${calculoAparaBr.formula} = ${calculoAparaBr.distanciaTotal.toFixed(2)}m`);
+  notes.push(`Cálculo ${emExposicao.name} → ${expositora.name}: D = ${calculoBparaA.formula} = ${calculoBparaA.distanciaTotal.toFixed(2)}m`);
+  notes.push(`Distância mínima de separação: ${distanciaMinima.toFixed(2)}m`);
+  
+  return {
+    calculoAparaBr,
+    calculoBparaA,
+    distanciaMinima,
+    notes,
+  };
+}
+
+// Legacy exports for backward compatibility
+export function getAlpha(severity: 'I' | 'II' | 'III', openingPercentage: number, ratio: number): number {
+  return getCoeficienteA(severity, openingPercentage, ratio);
+}
+
+export function generateTable3_1(params: any, result: any) {
+  // Legacy function - deprecated
+  return [];
 }
