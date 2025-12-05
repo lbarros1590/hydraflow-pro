@@ -333,7 +333,7 @@ export default function ProjectDetail() {
                   <Calculator className="w-4 h-4" />
                   Calculadora Hidráulica
                 </Button>
-                <Button variant="outline" onClick={() => navigate('/app/calculator/separacao')} className="gap-2">
+                <Button variant="outline" onClick={() => navigate(`/app/projects/${id}/separacao`)} className="gap-2">
                   <Ruler className="w-4 h-4" />
                   Cálculo de Separação
                 </Button>
