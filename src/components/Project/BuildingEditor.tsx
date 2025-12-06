@@ -1,6 +1,7 @@
 /**
  * Hierarchical Building Editor Component
  * Building → Floor → Sector → Doors
+ * Classification per NTCB 01/2025 Part 3 and NTCB 07/2020
  */
 import { useState } from 'react';
 import { UseFormReturn, useFieldArray } from 'react-hook-form';
@@ -22,7 +23,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Plus, 
   Trash2, 
@@ -33,10 +33,12 @@ import {
   LayoutGrid,
   DoorOpen,
   Flame,
-  Droplets
+  Droplets,
+  Ruler
 } from 'lucide-react';
-import { OCCUPANCY_DIVISIONS } from '@/core/ntcbClassification';
 import { cn } from '@/lib/utils';
+import { OccupancySearchInput } from './OccupancySearchInput';
+import { getTypicalFireLoad, calculatePopulation } from '@/core/ntcbData';
 
 interface BuildingEditorProps {
   form: UseFormReturn<ProjectFormData>;
@@ -162,19 +164,24 @@ export function BuildingEditor({ form }: BuildingEditorProps) {
     form.setValue(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.doors`, currentDoors.filter((_, i) => i !== doorIndex));
   };
 
-  const handleSelectOccupancy = (buildingIndex: number, floorIndex: number, sectorIndex: number, code: string) => {
-    const division = OCCUPANCY_DIVISIONS.find(d => d.code === code);
-    if (division) {
-      form.setValue(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.occupancyCode`, code);
-      form.setValue(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.occupancyName`, division.name);
-      form.setValue(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.fireLoad`, getDefaultFireLoad(code));
-      form.setValue(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.densityM2PerPerson`, getDensityFactor(code));
-      
-      // Recalculate population
-      const area = form.getValues(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.area`) || 0;
-      const density = getDensityFactor(code);
-      form.setValue(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.population`, Math.ceil(area / density));
+  const handleSelectOccupancy = (
+    buildingIndex: number, 
+    floorIndex: number, 
+    sectorIndex: number, 
+    result: { occupancyCode: string; occupancyName: string; fireLoad: number; cnaeCode?: string }
+  ) => {
+    form.setValue(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.occupancyCode`, result.occupancyCode);
+    form.setValue(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.occupancyName`, result.occupancyName);
+    form.setValue(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.fireLoad`, result.fireLoad);
+    if (result.cnaeCode) {
+      form.setValue(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.cnaeCode`, result.cnaeCode);
     }
+    form.setValue(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.densityM2PerPerson`, getDensityFactor(result.occupancyCode));
+    
+    // Recalculate population using NTCB data
+    const area = form.getValues(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.area`) || 0;
+    const population = calculatePopulation(result.occupancyCode, area);
+    form.setValue(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.population`, population);
   };
 
   const watchedBuildings = form.watch('buildings') || [];
@@ -555,9 +562,10 @@ export function BuildingEditor({ form }: BuildingEditorProps) {
                                                               onChange={e => {
                                                                 const area = parseFloat(e.target.value) || 0;
                                                                 field.onChange(area);
-                                                                // Recalculate population
-                                                                const density = form.getValues(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.densityM2PerPerson`) || 10;
-                                                                form.setValue(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.population`, Math.ceil(area / density));
+                                                                // Recalculate population using NTCB function
+                                                                const occupancyCode = form.getValues(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.occupancyCode`) || '';
+                                                                const population = calculatePopulation(occupancyCode, area);
+                                                                form.setValue(`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.population`, population);
                                                               }}
                                                             />
                                                           </FormControl>
@@ -571,24 +579,14 @@ export function BuildingEditor({ form }: BuildingEditorProps) {
                                                     name={`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.occupancyCode`}
                                                     render={({ field }) => (
                                                       <FormItem>
-                                                        <FormLabel className="text-xs">Ocupação NTCB</FormLabel>
-                                                        <Select 
-                                                          onValueChange={(value) => handleSelectOccupancy(buildingIndex, floorIndex, sectorIndex, value)} 
-                                                          value={field.value}
-                                                        >
-                                                          <FormControl>
-                                                            <SelectTrigger className="h-8 text-sm">
-                                                              <SelectValue placeholder="Selecione..." />
-                                                            </SelectTrigger>
-                                                          </FormControl>
-                                                          <SelectContent>
-                                                            {OCCUPANCY_DIVISIONS.map(div => (
-                                                              <SelectItem key={div.code} value={div.code}>
-                                                                {div.code} - {div.name}
-                                                              </SelectItem>
-                                                            ))}
-                                                          </SelectContent>
-                                                        </Select>
+                                                        <FormLabel className="text-xs">Ocupação NTCB (buscar por atividade)</FormLabel>
+                                                        <FormControl>
+                                                          <OccupancySearchInput
+                                                            value={field.value}
+                                                            onSelect={(result) => handleSelectOccupancy(buildingIndex, floorIndex, sectorIndex, result)}
+                                                            placeholder="Buscar atividade (ex: supermercado, escola)..."
+                                                          />
+                                                        </FormControl>
                                                       </FormItem>
                                                     )}
                                                   />
@@ -656,43 +654,73 @@ export function BuildingEditor({ form }: BuildingEditorProps) {
                                                     ) : (
                                                       <div className="space-y-2">
                                                         {(sector.doors || []).map((door, doorIndex) => (
-                                                          <div key={door.id} className="flex items-center gap-2 p-2 rounded bg-background border border-border">
-                                                            <DoorOpen className="h-4 w-4 text-muted-foreground" />
-                                                            <FormField
-                                                              control={form.control}
-                                                              name={`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.doors.${doorIndex}.quantity`}
-                                                              render={({ field }) => (
-                                                                <Input 
-                                                                  type="number"
-                                                                  className="h-7 w-14 text-xs text-center"
-                                                                  min={1}
-                                                                  {...field}
-                                                                  onChange={e => field.onChange(parseInt(e.target.value) || 1)}
-                                                                />
-                                                              )}
-                                                            />
-                                                            <span className="text-xs text-muted-foreground">×</span>
-                                                            <FormField
-                                                              control={form.control}
-                                                              name={`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.doors.${doorIndex}.width`}
-                                                              render={({ field }) => (
-                                                                <Input 
-                                                                  type="number"
-                                                                  step="0.05"
-                                                                  className="h-7 w-16 text-xs"
-                                                                  placeholder="1.00"
-                                                                  {...field}
-                                                                  onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
-                                                                />
-                                                              )}
-                                                            />
-                                                            <span className="text-xs text-muted-foreground">m</span>
+                                                          <div key={door.id} className="flex items-center gap-2 p-2 rounded bg-background border border-border flex-wrap">
+                                                            <DoorOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                            
+                                                            {/* Quantity */}
+                                                            <div className="flex items-center gap-1">
+                                                              <span className="text-xs text-muted-foreground">Qtd:</span>
+                                                              <FormField
+                                                                control={form.control}
+                                                                name={`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.doors.${doorIndex}.quantity`}
+                                                                render={({ field }) => (
+                                                                  <Input 
+                                                                    type="number"
+                                                                    className="h-7 w-12 text-xs text-center"
+                                                                    min={1}
+                                                                    {...field}
+                                                                    onChange={e => field.onChange(parseInt(e.target.value) || 1)}
+                                                                  />
+                                                                )}
+                                                              />
+                                                            </div>
+
+                                                            {/* Height */}
+                                                            <div className="flex items-center gap-1">
+                                                              <span className="text-xs text-muted-foreground">Alt:</span>
+                                                              <FormField
+                                                                control={form.control}
+                                                                name={`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.doors.${doorIndex}.height`}
+                                                                render={({ field }) => (
+                                                                  <Input 
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    className="h-7 w-14 text-xs"
+                                                                    placeholder="2.10"
+                                                                    {...field}
+                                                                    onChange={e => field.onChange(parseFloat(e.target.value) || 2.1)}
+                                                                  />
+                                                                )}
+                                                              />
+                                                              <span className="text-xs text-muted-foreground">m</span>
+                                                            </div>
+
+                                                            {/* Width */}
+                                                            <div className="flex items-center gap-1">
+                                                              <span className="text-xs text-muted-foreground">Larg:</span>
+                                                              <FormField
+                                                                control={form.control}
+                                                                name={`buildings.${buildingIndex}.floors.${floorIndex}.sectors.${sectorIndex}.doors.${doorIndex}.width`}
+                                                                render={({ field }) => (
+                                                                  <Input 
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    className="h-7 w-14 text-xs"
+                                                                    placeholder="0.80"
+                                                                    {...field}
+                                                                    onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                                                                  />
+                                                                )}
+                                                              />
+                                                              <span className="text-xs text-muted-foreground">m</span>
+                                                            </div>
+
                                                             <Button
                                                               type="button"
                                                               variant="ghost"
                                                               size="sm"
                                                               onClick={(e) => handleRemoveDoor(e, buildingIndex, floorIndex, sectorIndex, doorIndex)}
-                                                              className="h-6 w-6 p-0 text-destructive hover:text-destructive ml-auto"
+                                                              className="h-6 w-6 p-0 text-destructive hover:text-destructive ml-auto shrink-0"
                                                             >
                                                               <Trash2 className="h-3 w-3" />
                                                             </Button>
