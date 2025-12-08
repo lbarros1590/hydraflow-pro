@@ -48,15 +48,92 @@ export const projectBuildingSchema = z.object({
   id: z.string(),
   name: z.string().min(1, 'Nome da edificação é obrigatório'),
   address: z.string().optional(),
+  
+  // Classificação NTCB 01/2025 Parte 3
+  existencePeriod: z.string().optional(), // ID do período de existência
+  totalHeight: z.number().min(0).optional(), // Altura total da edificação (m)
+  heightClassType: z.string().optional(), // I, II, III, IV, V, VI
+  
   // Separation calculation fields
   facadeWidth: z.number().min(0).optional(),
   facadeHeight: z.number().min(0).optional(),
   openingArea: z.number().min(0).optional(),
+  openingPercentage: z.number().min(0).max(100).optional(),
   trrf: z.number().min(0).optional(),
   hasSprinklers: z.boolean().default(false),
   hasFireWall: z.boolean().default(false),
   hasWaterCurtain: z.boolean().default(false),
   hasOpeningProtection: z.boolean().default(false),
+  
+  // Medidas de segurança
+  safetyMeasures: z.array(z.string()).default([]),
+  specialRisks: z.array(z.string()).default([]),
+  otherMeasures: z.string().optional(),
+  otherSpecialRisks: z.string().optional(),
+  
+  // Resistência ao fogo (Seção 6.1)
+  fireResistance: z.object({
+    wallType: z.string().optional(),
+    wallThickness: z.string().optional(),
+    trrfRequired: z.number().optional(),
+    trrfExisting: z.object({
+      integrity: z.number().optional(),
+      tightness: z.number().optional(),
+      thermalInsulation: z.number().optional(),
+      trrf: z.number().optional(),
+    }).optional(),
+  }).optional(),
+  
+  // Controle de materiais de acabamento (NTCB 12/2020)
+  finishingMaterials: z.array(z.object({
+    groupDivision: z.string(),
+    floor: z.string(),
+    wallsPartitions: z.string(),
+    ceilingRoof: z.string(),
+    facade: z.string(),
+  })).optional(),
+  
+  // Acesso de viaturas (Seção 6.2)
+  vehicleAccess: z.object({
+    roads: z.array(z.object({
+      width: z.number(),
+      freeHeight: z.union([z.number(), z.literal('LIVRE')]),
+      loadCapacity: z.number(),
+      turnType: z.string().optional(),
+    })).default([]),
+    gates: z.array(z.object({
+      width: z.number(),
+      height: z.union([z.number(), z.literal('LIVRE')]),
+    })).default([]),
+  }).optional(),
+  
+  // Escadas (Seção 6.3.1)
+  stairs: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    type: z.enum(['NE', 'EP', 'PF']),
+    material: z.string(),
+    width: z.number(),
+    heightPerRun: z.number(),
+    guardRailHeight: z.number(),
+    handrail: z.object({
+      height: z.number(),
+      diameterCircular: z.number().optional(),
+      widthRectangular: z.number().optional(),
+      wallClearance: z.number(),
+    }),
+    steps: z.object({
+      quantityPerRun: z.number(),
+      riserHeight: z.number(),
+      treadDepth: z.number(),
+    }),
+    landing: z.object({
+      quantity: z.number().optional(),
+      length: z.number().optional(),
+      width: z.number().optional(),
+    }).optional(),
+  })).default([]),
+  
   floors: z.array(projectFloorSchema).default([]),
 });
 
