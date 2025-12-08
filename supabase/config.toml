@@ -2,3 +2,6 @@ project_id = "bxiomnhyafuhxdfrcfho"
 
 [functions.ntcb-chat]
 verify_jwt = false
+
+[functions.classify-occupancy]
+verify_jwt = false
