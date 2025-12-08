@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { OccupancySearchInput } from './OccupancySearchInput';
+import { BuildingExtendedData } from './BuildingExtendedData';
 import { getTypicalFireLoad, calculatePopulation } from '@/core/ntcbData';
 
 interface BuildingEditorProps {
@@ -742,6 +743,9 @@ export function BuildingEditor({ form }: BuildingEditorProps) {
                             </Collapsible>
                           ))}
                         </div>
+
+                        {/* Extended Building Data for Annex G */}
+                        <BuildingExtendedData form={form} buildingIndex={buildingIndex} />
                       </div>
                     </CollapsibleContent>
                   </div>
