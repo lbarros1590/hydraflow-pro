@@ -345,9 +345,9 @@ function createBuildingCharacteristicsTable(formData: ProjectFormData): (Paragra
 
 // Section 5.1.3 - Safety Measures
 function createSafetyMeasuresTable(formData: ProjectFormData): (Paragraph | Table)[] {
-  const building = formData.buildings?.[0];
-  const selectedMeasures = building?.safetyMeasures || [];
-  const selectedRisks = building?.specialRisks || [];
+  // Usa medidas globais do projeto
+  const selectedMeasures = formData.mandatoryMeasures || formData.voluntaryMeasures || [];
+  const selectedRisks = formData.specialRisks || [];
 
   // Split measures into two columns
   const col1Measures = SAFETY_MEASURES.slice(0, Math.ceil(SAFETY_MEASURES.length / 2));
@@ -466,8 +466,8 @@ function createFireResistanceSection(formData: ProjectFormData): (Paragraph | Ta
 
 // Section 6.2 - Vehicle Access
 function createVehicleAccessSection(formData: ProjectFormData): (Paragraph | Table)[] {
-  const building = formData.buildings?.[0];
-  const va = building?.vehicleAccess;
+  // Usa vehicleAccess global do projeto (não por edificação)
+  const va = formData.vehicleAccess || formData.buildings?.[0]?.vehicleAccess;
 
   const roadRows: TableRow[] = [
     new TableRow({ children: [
