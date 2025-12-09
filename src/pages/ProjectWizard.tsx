@@ -20,9 +20,20 @@ import {
   ClipboardCheck,
   Check,
   Home,
-  Loader2
+  Loader2,
+  CheckCircle,
+  FileText,
+  Calculator
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Step Components
 import { IdentificationStep } from '@/components/Wizard/Steps/IdentificationStep';
@@ -52,8 +63,11 @@ const defaultValues: ProjectFormData = {
   numberOfFloors: 1,
   specialRisks: [],
   sectors: [],
+  buildings: [],
   mandatoryMeasures: [],
   exemptMeasures: [],
+  voluntaryMeasures: [],
+  vehicleAccess: { roads: [], gates: [] },
 };
 
 function calculateRiskClass(data: ProjectFormData): 'baixo' | 'medio' | 'alto' {
@@ -74,6 +88,8 @@ export default function ProjectWizard() {
   const [currentStep, setCurrentStep] = useState<StepId>('identification');
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(!!isEditing);
+  const [showFinishDialog, setShowFinishDialog] = useState(false);
+  const [savedProjectId, setSavedProjectId] = useState<string | null>(null);
 
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectFormSchema),
@@ -146,8 +162,8 @@ export default function ProjectWizard() {
     }
   };
 
-  const handleSave = async (status: ProjectStatus = 'em_andamento') => {
-    if (!user) return;
+  const handleSave = async (status: ProjectStatus = 'em_andamento'): Promise<string | null> => {
+    if (!user) return null;
     
     setLoading(true);
     const data = form.getValues();
@@ -166,10 +182,7 @@ export default function ProjectWizard() {
 
         if (error) throw error;
         toast({ title: 'Projeto atualizado', description: 'As alterações foram salvas com sucesso.' });
-        
-        if (status === 'em_andamento') {
-          navigate(`/app/projects/${id}/hydraulic`);
-        }
+        return id;
       } else {
         const { data: newProject, error } = await supabase
           .from('projects')
@@ -185,14 +198,12 @@ export default function ProjectWizard() {
 
         if (error) throw error;
         toast({ title: 'Projeto criado', description: 'O projeto foi salvo com sucesso.' });
-        
-        if (newProject && status === 'em_andamento') {
-          navigate(`/app/projects/${newProject.id}/hydraulic`);
-        }
+        return newProject?.id || null;
       }
     } catch (error) {
       console.error('Error saving project:', error);
       toast({ title: 'Erro', description: 'Não foi possível salvar o projeto.', variant: 'destructive' });
+      return null;
     } finally {
       setLoading(false);
     }
@@ -231,7 +242,35 @@ export default function ProjectWizard() {
       });
       return;
     }
-    await handleSave('em_andamento');
+    
+    // Save with em_andamento status and show options dialog
+    const projectId = await handleSave('em_andamento');
+    if (projectId) {
+      setSavedProjectId(projectId);
+      setShowFinishDialog(true);
+    }
+  };
+
+  const handleConcludeProject = async () => {
+    const projectId = savedProjectId || (isEditing ? id : null);
+    if (!projectId) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ status: 'concluido' })
+        .eq('id', projectId);
+
+      if (error) throw error;
+      toast({ title: 'Projeto concluído', description: 'O projeto foi marcado como concluído.' });
+      navigate(`/app/projects/${projectId}`);
+    } catch (error) {
+      console.error('Error concluding project:', error);
+      toast({ title: 'Erro', description: 'Não foi possível concluir o projeto.', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (initialLoading) {
@@ -259,7 +298,7 @@ export default function ProjectWizard() {
                   {isEditing ? 'Editar Projeto' : 'Novo Projeto'}
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Assistente de criação PSCIP - Mato Grosso
+                  Assistente de criação PSCIP
                 </p>
               </div>
             </div>
@@ -367,7 +406,7 @@ export default function ProjectWizard() {
                   </>
                 ) : (
                   <>
-                    Finalizar e Calcular
+                    Finalizar
                     <Check className="h-4 w-4" />
                   </>
                 )}
@@ -381,6 +420,53 @@ export default function ProjectWizard() {
           </div>
         </div>
       </div>
+
+      {/* Finish Options Dialog */}
+      <Dialog open={showFinishDialog} onOpenChange={setShowFinishDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              Projeto Salvo com Sucesso!
+            </DialogTitle>
+            <DialogDescription>
+              O projeto foi salvo. O que você gostaria de fazer agora?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4">
+            <Button 
+              variant="outline" 
+              className="w-full justify-start gap-3"
+              onClick={() => navigate(`/app/projects/${savedProjectId}`)}
+            >
+              <FileText className="h-4 w-4" />
+              Ver Detalhes do Projeto
+            </Button>
+            <Button 
+              variant="outline" 
+              className="w-full justify-start gap-3"
+              onClick={() => navigate(`/app/projects/${savedProjectId}/hydraulic`)}
+            >
+              <Calculator className="h-4 w-4" />
+              Ir para Calculadora Hidráulica
+            </Button>
+            <Button 
+              variant="default" 
+              className="w-full justify-start gap-3 bg-green-600 hover:bg-green-700"
+              onClick={handleConcludeProject}
+              disabled={loading}
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+              Marcar como Concluído
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => navigate('/app/projects')}>
+              Voltar para Projetos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -26,12 +26,14 @@ import {
   CheckCircle,
   Share2,
   FolderOpen,
+  Loader2,
 } from 'lucide-react';
 import type { ProjectFormData, ProjectStatus } from '@/components/Wizard/types';
 import { FileManager } from '@/components/ProjectFiles/FileManager';
 import { ShareProjectDialog } from '@/components/Sharing/ShareProjectDialog';
 import { EmergencyExitResults } from '@/components/Project/EmergencyExitResults';
 import { SeparationResults } from '@/components/Project/SeparationResults';
+import { AnnexGReport } from '@/components/Project/AnnexGReport';
 
 interface Project {
   id: string;
@@ -62,6 +64,7 @@ export default function ProjectDetail() {
   const { user } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   useEffect(() => {
     if (id) fetchProject();
@@ -87,6 +90,31 @@ export default function ProjectDetail() {
       navigate('/app/projects');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateStatus = async (newStatus: ProjectStatus) => {
+    if (!project) return;
+    
+    setUpdatingStatus(true);
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ status: newStatus })
+        .eq('id', project.id);
+
+      if (error) throw error;
+      
+      setProject({ ...project, status: newStatus });
+      toast({ 
+        title: 'Status atualizado', 
+        description: `Projeto marcado como "${statusConfig[newStatus].label}"` 
+      });
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast({ title: 'Erro', description: 'Não foi possível atualizar o status.', variant: 'destructive' });
+    } finally {
+      setUpdatingStatus(false);
     }
   };
 
@@ -337,7 +365,19 @@ export default function ProjectDetail() {
           <FileManager projectId={id!} />
         </TabsContent>
 
-        <TabsContent value="actions" className="mt-6">
+        <TabsContent value="actions" className="mt-6 space-y-6">
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Relatórios e Documentos</CardTitle>
+              <CardDescription>Gere relatórios formatados para o projeto</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-4">
+                <AnnexGReport formData={data} />
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="bg-card border-border">
             <CardHeader>
               <CardTitle>Calculadoras e Ferramentas</CardTitle>
@@ -353,10 +393,49 @@ export default function ProjectDetail() {
                   <Ruler className="w-4 h-4" />
                   Cálculo de Separação
                 </Button>
-                <Button variant="outline" className="gap-2" disabled>
-                  <FileText className="w-4 h-4" />
-                  Gerar Anexo G (em breve)
-                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Status do Projeto</CardTitle>
+              <CardDescription>Altere o status do projeto</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-4">
+                {project.status !== 'rascunho' && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => handleUpdateStatus('rascunho')}
+                    disabled={updatingStatus}
+                    className="gap-2"
+                  >
+                    {updatingStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
+                    Marcar como Rascunho
+                  </Button>
+                )}
+                {project.status !== 'em_andamento' && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => handleUpdateStatus('em_andamento')}
+                    disabled={updatingStatus}
+                    className="gap-2"
+                  >
+                    {updatingStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : <Flame className="w-4 h-4" />}
+                    Marcar Em Andamento
+                  </Button>
+                )}
+                {project.status !== 'concluido' && (
+                  <Button 
+                    onClick={() => handleUpdateStatus('concluido')}
+                    disabled={updatingStatus}
+                    className="gap-2 bg-green-600 hover:bg-green-700"
+                  >
+                    {updatingStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                    Marcar como Concluído
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

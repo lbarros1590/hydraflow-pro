@@ -1,15 +1,16 @@
 /**
- * Step 4 - Mandatory & Voluntary Measures Checklist
+ * Step 4 - Mandatory & Voluntary Measures Checklist + Vehicle Access
  */
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { ProjectFormData, ALL_MEASURES } from '../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { FormField, FormItem, FormControl, FormLabel, FormDescription } from '@/components/ui/form';
+import { FormField, FormItem, FormControl, FormLabel } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { 
   ClipboardCheck, 
   Shield, 
@@ -30,7 +31,9 @@ import {
   Users,
   DoorOpen,
   KeyRound,
-  FileText
+  FileText,
+  Truck,
+  Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -50,6 +53,7 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
   const specialRisks = form.watch('specialRisks') || [];
   const exemptMeasures = form.watch('exemptMeasures') || [];
   const voluntaryMeasures = form.watch('voluntaryMeasures') || [];
+  const vehicleAccess = form.watch('vehicleAccess') || { roads: [], gates: [] };
 
   // Calculate mandatory measures based on project data
   const analysis = useMemo(() => {
@@ -116,6 +120,41 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
     } else {
       form.setValue('voluntaryMeasures', current.filter(id => id !== measureId));
     }
+  };
+
+  // Vehicle Access handlers
+  const handleAddRoad = () => {
+    const current = form.getValues('vehicleAccess') || { roads: [], gates: [] };
+    const newRoad = { width: 7.27, freeHeight: 'LIVRE' as const, loadCapacity: 2000, turnType: 'NA' };
+    form.setValue('vehicleAccess', {
+      ...current,
+      roads: [...(current.roads || []), newRoad]
+    });
+  };
+
+  const handleRemoveRoad = (index: number) => {
+    const current = form.getValues('vehicleAccess') || { roads: [], gates: [] };
+    form.setValue('vehicleAccess', {
+      ...current,
+      roads: current.roads.filter((_, i) => i !== index)
+    });
+  };
+
+  const handleAddGate = () => {
+    const current = form.getValues('vehicleAccess') || { roads: [], gates: [] };
+    const newGate = { width: 7.27, height: 'LIVRE' as const };
+    form.setValue('vehicleAccess', {
+      ...current,
+      gates: [...(current.gates || []), newGate]
+    });
+  };
+
+  const handleRemoveGate = (index: number) => {
+    const current = form.getValues('vehicleAccess') || { roads: [], gates: [] };
+    form.setValue('vehicleAccess', {
+      ...current,
+      gates: current.gates.filter((_, i) => i !== index)
+    });
   };
 
   // Get non-mandatory measures that can be added voluntarily
@@ -300,6 +339,165 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
         </CardContent>
       </Card>
 
+      {/* Vehicle Access Card - GLOBAL for the terrain */}
+      <Card className="border-blue-500/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Truck className="h-5 w-5 text-blue-600" />
+            Acesso de Viaturas (Seção 6.2)
+          </CardTitle>
+          <CardDescription>
+            Dados globais do terreno para acesso de viaturas do Corpo de Bombeiros
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Roads */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">VIAS DE ACESSO</p>
+              <Button type="button" variant="outline" size="sm" onClick={handleAddRoad} className="gap-1">
+                <Plus className="h-4 w-4" /> Adicionar Via
+              </Button>
+            </div>
+            {(vehicleAccess?.roads || []).length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg">
+                Nenhuma via cadastrada. Clique em "Adicionar Via" para começar.
+              </p>
+            )}
+            {(vehicleAccess?.roads || []).map((road, roadIndex) => (
+              <div key={roadIndex} className="grid grid-cols-5 gap-3 items-end p-3 bg-muted/30 rounded-lg">
+                <FormField
+                  control={form.control}
+                  name={`vehicleAccess.roads.${roadIndex}.width`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Largura (m)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          className="h-9" 
+                          {...field} 
+                          onChange={e => field.onChange(parseFloat(e.target.value) || 0)} 
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={`vehicleAccess.roads.${roadIndex}.freeHeight`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Altura Livre</FormLabel>
+                      <FormControl>
+                        <Input className="h-9" placeholder="LIVRE" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={`vehicleAccess.roads.${roadIndex}.loadCapacity`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Capacidade (Kg)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          className="h-9" 
+                          {...field} 
+                          onChange={e => field.onChange(parseInt(e.target.value) || 0)} 
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={`vehicleAccess.roads.${roadIndex}.turnType`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Tipo Contorno</FormLabel>
+                      <FormControl>
+                        <Input className="h-9" placeholder="NA" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 text-destructive hover:text-destructive"
+                  onClick={() => handleRemoveRoad(roadIndex)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          {/* Gates */}
+          <div className="space-y-2 pt-4 border-t">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">PORTÕES</p>
+              <Button type="button" variant="outline" size="sm" onClick={handleAddGate} className="gap-1">
+                <Plus className="h-4 w-4" /> Adicionar Portão
+              </Button>
+            </div>
+            {(vehicleAccess?.gates || []).length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg">
+                Nenhum portão cadastrado. Clique em "Adicionar Portão" para começar.
+              </p>
+            )}
+            {(vehicleAccess?.gates || []).map((gate, gateIndex) => (
+              <div key={gateIndex} className="grid grid-cols-3 gap-3 items-end p-3 bg-muted/30 rounded-lg">
+                <FormField
+                  control={form.control}
+                  name={`vehicleAccess.gates.${gateIndex}.width`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Largura (m)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          className="h-9" 
+                          {...field} 
+                          onChange={e => field.onChange(parseFloat(e.target.value) || 0)} 
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={`vehicleAccess.gates.${gateIndex}.height`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Altura</FormLabel>
+                      <FormControl>
+                        <Input className="h-9" placeholder="LIVRE" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 text-destructive hover:text-destructive"
+                  onClick={() => handleRemoveGate(gateIndex)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Exempt Warning */}
       {exemptMeasures.length > 0 && (
         <Alert variant="destructive" className="border-amber-500/50 bg-amber-500/5 text-amber-700">
@@ -336,8 +534,8 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
             <div className="text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-1">Próximos Passos</p>
               <p>
-                Ao finalizar, você será direcionado para a calculadora hidráulica onde poderá 
-                dimensionar o sistema de hidrantes com base nos parâmetros deste projeto.
+                Ao finalizar, você poderá gerar o relatório Anexo G com todas as tabelas 
+                formatadas e acessar as calculadoras específicas do projeto.
               </p>
             </div>
           </div>

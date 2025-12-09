@@ -198,6 +198,23 @@ export const projectFormSchema = z.object({
   // Separation between buildings
   actualSeparationDistance: z.number().min(0).optional(),
   hasFireDepartment: z.boolean().default(true),
+  
+  // GLOBAL: Acesso de Viaturas (para o terreno/projeto - não por edificação)
+  vehicleAccess: z.object({
+    roads: z.array(z.object({
+      width: z.number(),
+      freeHeight: z.union([z.number(), z.literal('LIVRE')]),
+      loadCapacity: z.number(),
+      turnType: z.string().optional(),
+    })).default([]),
+    gates: z.array(z.object({
+      width: z.number(),
+      height: z.union([z.number(), z.literal('LIVRE')]),
+    })).default([]),
+  }).optional(),
+  
+  // Classificação NTCB Global
+  existencePeriod: z.string().optional(),
 });
 
 export type ProjectFormData = z.infer<typeof projectFormSchema>;
