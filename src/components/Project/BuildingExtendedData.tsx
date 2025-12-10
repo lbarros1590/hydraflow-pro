@@ -1,12 +1,11 @@
 /**
  * Extended Building Data Forms - Anexo G NTCB 01/2025
- * Collects data for fire safety report tables
+ * Collects data for fire safety report tables (per building: classification, fire resistance, stairs)
  */
 import { UseFormReturn } from 'react-hook-form';
 import { ProjectFormData } from '@/components/Wizard/types';
 import { FormField, FormItem, FormLabel, FormControl } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,19 +16,13 @@ import {
   ChevronUp, 
   Plus, 
   Trash2, 
-  Shield, 
-  AlertTriangle,
   Ruler,
-  Truck,
   Footprints,
   Flame
 } from 'lucide-react';
 import { useState } from 'react';
 import { 
   EXISTENCE_PERIODS, 
-  HEIGHT_CLASSES, 
-  SAFETY_MEASURES, 
-  SPECIAL_RISKS,
   getHeightClass,
   getFireRiskLevel
 } from './AnnexGReportData';
