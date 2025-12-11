@@ -364,7 +364,7 @@ export default function ProjectDetail() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-4">
-                <AnnexGReport formData={data} />
+                <AnnexGReport formData={data} projectId={id} />
               </div>
             </CardContent>
           </Card>
