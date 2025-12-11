@@ -220,24 +220,82 @@ export function SavedCalculationsPanel({ projectId }: SavedCalculationsPanelProp
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <CardContent>
-                        {results?.summary ? (
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="p-3 rounded-lg bg-muted/50">
-                              <p className="text-sm text-muted-foreground">Vazão Total</p>
-                              <p className="font-mono font-bold">{results.summary.totalFlow?.toFixed(2) || '-'} L/min</p>
+                        {results ? (
+                          <div className="space-y-4">
+                            {/* Config/Demand Summary */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              <div className="p-3 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground">Vazão Total</p>
+                                <p className="font-mono font-bold">
+                                  {results.config?.demandConfig?.totalFlow?.toFixed(0) || 
+                                   results.summary?.totalFlow?.toFixed(0) || '-'} L/min
+                                </p>
+                              </div>
+                              <div className="p-3 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground">Pressão Bomba</p>
+                                <p className="font-mono font-bold">
+                                  {results.pump?.minPressure?.toFixed(2) || 
+                                   results.summary?.minPressure?.toFixed(2) || '-'} mca
+                                </p>
+                              </div>
+                              <div className="p-3 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground">Reserva</p>
+                                <p className="font-mono font-bold">
+                                  {results.reserve?.volumeLiters?.toLocaleString() || 
+                                   results.config?.demandConfig?.reserveVolume?.toLocaleString() || '-'} L
+                                </p>
+                              </div>
+                              <div className="p-3 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground">Tipo Sistema</p>
+                                <p className="font-mono font-bold">
+                                  {results.config?.ntcbSystemType ? `Tipo ${results.config.ntcbSystemType}` : 
+                                   results.summary?.systemType || '-'}
+                                </p>
+                              </div>
                             </div>
-                            <div className="p-3 rounded-lg bg-muted/50">
-                              <p className="text-sm text-muted-foreground">Pressão Mín.</p>
-                              <p className="font-mono font-bold">{results.summary.minPressure?.toFixed(2) || '-'} mca</p>
-                            </div>
-                            <div className="p-3 rounded-lg bg-muted/50">
-                              <p className="text-sm text-muted-foreground">Hidrantes</p>
-                              <p className="font-mono font-bold">{results.summary.hydrantCount || '-'}</p>
-                            </div>
-                            <div className="p-3 rounded-lg bg-muted/50">
-                              <p className="text-sm text-muted-foreground">Tipo Sistema</p>
-                              <p className="font-mono font-bold">{results.summary.systemType || '-'}</p>
-                            </div>
+                            
+                            {/* Pump Details */}
+                            {results.pump && (
+                              <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                                <p className="text-sm font-medium mb-2">Bomba</p>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                                  <div>
+                                    <span className="text-muted-foreground">Potência: </span>
+                                    <span className="font-mono">{results.pump.commercialPowerCV || '-'} CV</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Eficiência: </span>
+                                    <span className="font-mono">{((results.pump.efficiency || 0) * 100).toFixed(0)}%</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Vazão: </span>
+                                    <span className="font-mono">{results.pump.totalFlowLmin?.toFixed(0) || '-'} L/min</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Pressão: </span>
+                                    <span className="font-mono">{results.pump.minPressure?.toFixed(2) || '-'} mca</span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Hydrants Summary */}
+                            {results.hydrants?.mostUnfavorable && (
+                              <div className="p-3 rounded-lg bg-muted/30">
+                                <p className="text-sm font-medium mb-2">Hidrantes Mais Desfavoráveis</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {(Array.isArray(results.hydrants.mostUnfavorable) 
+                                    ? results.hydrants.mostUnfavorable 
+                                    : [results.hydrants.mostUnfavorable]
+                                  ).map((h: any, i: number) => (
+                                    <Badge key={i} variant={h.isOk ? 'secondary' : 'destructive'}>
+                                      {h.id}: {h.nozzlePressure?.toFixed(2)} mca
+                                      {h.isOk ? ' ✓' : ' ✗'}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <p className="text-muted-foreground text-sm">Dados detalhados não disponíveis</p>
@@ -318,37 +376,61 @@ export function SavedCalculationsPanel({ projectId }: SavedCalculationsPanelProp
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>Par de Edificações</TableHead>
-                                <TableHead className="text-right">Distância Req.</TableHead>
+                                <TableHead>Expositora</TableHead>
+                                <TableHead>Em Exposição</TableHead>
+                                <TableHead className="text-right">Dist. Exigida</TableHead>
+                                <TableHead className="text-right">Dist. Existente</TableHead>
                                 <TableHead className="text-center">Status</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {calculations.map((c: any, idx: number) => (
-                                <TableRow key={idx}>
-                                  <TableCell>
-                                    {c.buildingAName || c.buildingA || 'Edificação A'} ↔ {c.buildingBName || c.buildingB || 'Edificação B'}
-                                  </TableCell>
-                                  <TableCell className="text-right font-mono">
-                                    {(c.requiredDistance || c.distanceRequired || c.separationRequired)?.toFixed(2) || '-'}m
-                                  </TableCell>
-                                  <TableCell className="text-center">
-                                    {c.isCompliant || c.compliant ? (
-                                      <CheckCircle className="h-5 w-5 text-success mx-auto" />
-                                    ) : (
-                                      <XCircle className="h-5 w-5 text-destructive mx-auto" />
-                                    )}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
+                              {calculations.map((c: any, idx: number) => {
+                                // Handle nested structure from database
+                                const result = c.result || c;
+                                const scenario1 = result?.scenario1;
+                                const scenario2 = result?.scenario2;
+                                const expositoraName = scenario1?.expositoraName || c.buildingAName || 'Expositora';
+                                const emExposicaoName = scenario1?.emExposicaoName || c.buildingBName || 'Em Exposição';
+                                const requiredDist = result?.minimumDistance || c.requiredDistance || c.distanceRequired || '-';
+                                const existingDist = c.existingDistance || result?.existingDistance || '-';
+                                const isCompliant = result?.isCompliant ?? c.isCompliant ?? c.compliant ?? false;
+                                
+                                return (
+                                  <TableRow key={idx}>
+                                    <TableCell className="font-medium">{expositoraName}</TableCell>
+                                    <TableCell>{emExposicaoName}</TableCell>
+                                    <TableCell className="text-right font-mono">
+                                      {typeof requiredDist === 'number' ? requiredDist.toFixed(2) : requiredDist}m
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono">
+                                      {typeof existingDist === 'number' ? existingDist.toFixed(2) : existingDist}m
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                      {isCompliant ? (
+                                        <CheckCircle className="h-5 w-5 text-green-600 mx-auto" />
+                                      ) : (
+                                        <XCircle className="h-5 w-5 text-destructive mx-auto" />
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
                             </TableBody>
                           </Table>
                         ) : buildings && Array.isArray(buildings) && buildings.length > 0 ? (
-                          <div className="space-y-2">
-                            <p className="text-sm text-muted-foreground">Edificações cadastradas:</p>
-                            <div className="flex flex-wrap gap-2">
+                          <div className="space-y-3">
+                            <p className="text-sm font-medium">Edificações cadastradas:</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               {buildings.map((b: any, idx: number) => (
-                                <Badge key={idx} variant="outline">{b.name || `Edificação ${idx + 1}`}</Badge>
+                                <div key={idx} className="p-3 rounded-lg bg-muted/50 border">
+                                  <p className="font-medium">{b.name || `Edificação ${idx + 1}`}</p>
+                                  <div className="text-sm text-muted-foreground mt-1 space-y-1">
+                                    {b.occupancyCode && <p>Ocupação: {b.occupancyCode}</p>}
+                                    {b.totalArea && <p>Área: {b.totalArea} m²</p>}
+                                    {b.height && <p>Altura: {b.height} m</p>}
+                                    {b.fireLoadMJm2 && <p>Carga Incêndio: {b.fireLoadMJm2} MJ/m²</p>}
+                                  </div>
+                                </div>
                               ))}
                             </div>
                           </div>
@@ -374,7 +456,7 @@ export function SavedCalculationsPanel({ projectId }: SavedCalculationsPanelProp
                 <Button 
                   variant="outline" 
                   className="mt-4"
-                  onClick={() => navigate(`/app/projects/${projectId}/emergency-exit`)}
+                  onClick={() => navigate(`/app/projects/${projectId}/saidas`)}
                 >
                   <Calculator className="h-4 w-4 mr-2" />
                   Ir para Calculadora

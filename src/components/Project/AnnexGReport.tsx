@@ -1,11 +1,13 @@
 /**
  * Annex G Report Generator - NTCB 01/2025
  * Generates Word document with formatted tables for fire safety report
+ * Now includes data from saved calculations (Hydraulic, Separation, Emergency Exit)
  */
 import { Button } from '@/components/ui/button';
 import { FileText, Download, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Document,
   Paragraph,
@@ -36,6 +38,13 @@ import {
 
 interface AnnexGReportProps {
   formData: ProjectFormData;
+  projectId?: string;
+}
+
+interface SavedCalculations {
+  hydraulic: any | null;
+  separation: any | null;
+  emergencyExit: any | null;
 }
 
 // Table borders
@@ -87,8 +96,61 @@ function checkCell(checked: boolean): TableCell {
   });
 }
 
-export function AnnexGReport({ formData }: AnnexGReportProps) {
+export function AnnexGReport({ formData, projectId }: AnnexGReportProps) {
   const [generating, setGenerating] = useState(false);
+  const [savedCalcs, setSavedCalcs] = useState<SavedCalculations>({
+    hydraulic: null,
+    separation: null,
+    emergencyExit: null,
+  });
+
+  // Fetch saved calculations when component mounts
+  useEffect(() => {
+    if (projectId) {
+      fetchSavedCalculations();
+    }
+  }, [projectId]);
+
+  const fetchSavedCalculations = async () => {
+    if (!projectId) return;
+    
+    try {
+      const [hydraulicRes, separationRes, emergencyRes] = await Promise.all([
+        supabase
+          .from('hydraulic_calculations')
+          .select('*')
+          .eq('project_id', projectId)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single(),
+        supabase
+          .from('separation_calculations')
+          .select('*')
+          .eq('project_id', projectId)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single(),
+        supabase
+          .from('emergency_exit_calculations')
+          .select('*')
+          .eq('project_id', projectId)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single(),
+      ]);
+
+      setSavedCalcs({
+        hydraulic: hydraulicRes.data,
+        separation: separationRes.data,
+        emergencyExit: emergencyRes.data,
+      });
+    } catch (error) {
+      console.log('No saved calculations found');
+    }
+  };
 
   const generateReport = async () => {
     setGenerating(true);
@@ -135,15 +197,24 @@ export function AnnexGReport({ formData }: AnnexGReportProps) {
             // Section 6.2 - Vehicle Access
             ...createVehicleAccessSection(formData),
 
-            // Table 3.3 - Emergency Exits (NTCB 13/2020)
+            // Table 6.3 - Emergency Exits (NTCB 13/2020)
             new Paragraph({ children: [new PageBreak()] }),
-            ...createEmergencyExitsTable(formData),
+            ...createEmergencyExitsTable(formData, savedCalcs.emergencyExit),
 
             // Section 6.3.1 - Stairs
             ...createStairsSection(formData),
 
-            // Separation Table (if multiple buildings)
-            ...(formData.buildings && formData.buildings.length > 1 ? [
+            // Section 6.7 - Hydrants and Hose Reels
+            ...(savedCalcs.hydraulic ? [
+              new Paragraph({ children: [new PageBreak()] }),
+              ...createHydraulicSystemTable(savedCalcs.hydraulic)
+            ] : []),
+
+            // Separation Table (NTCB 09)
+            ...(savedCalcs.separation ? [
+              new Paragraph({ children: [new PageBreak()] }),
+              ...createSeparationTableFromCalc(savedCalcs.separation)
+            ] : formData.buildings && formData.buildings.length > 1 ? [
               new Paragraph({ children: [new PageBreak()] }),
               ...createSeparationTable(formData)
             ] : []),
@@ -599,7 +670,7 @@ function createStairsSection(formData: ProjectFormData): (Paragraph | Table)[] {
 }
 
 // Section 6.3 - Emergency Exits (NTCB 13/2020) - Formato correto conforme Anexo G.4
-function createEmergencyExitsTable(formData: ProjectFormData): (Paragraph | Table)[] {
+function createEmergencyExitsTable(formData: ProjectFormData, emergencyCalc?: any): (Paragraph | Table)[] {
   const elements: (Paragraph | Table)[] = [
     new Paragraph({
       children: [new TextRun({ text: '6.3 SAÍDAS DE EMERGÊNCIA', bold: true, size: 20 })],
@@ -695,6 +766,117 @@ function createEmergencyExitsTable(formData: ProjectFormData): (Paragraph | Tabl
   });
 
   return elements;
+}
+
+// Section 6.7 - Hydraulic System Table (NTCB 19)
+function createHydraulicSystemTable(hydraulicCalc: any): (Paragraph | Table)[] {
+  const results = hydraulicCalc?.results || {};
+  const config = results?.config || {};
+  const pump = results?.pump || {};
+  const reserve = results?.reserve || {};
+  const hydrants = results?.hydrants || {};
+
+  return [
+    new Paragraph({
+      children: [new TextRun({ text: '6.7 HIDRANTES E MANGOTINHOS', bold: true, size: 20 })],
+      spacing: { before: 300, after: 50 }
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: 'Esta medida de segurança foi dimensionada atendendo à NTCB 19 do Corpo de Bombeiros Militar de Mato Grosso.', size: 18, italics: true })],
+      spacing: { after: 100 }
+    }),
+    new Paragraph({ children: [new TextRun({ text: 'IDENTIFICAÇÃO DO TIPO DE SISTEMA', bold: true, size: 18 })], spacing: { after: 50 } }),
+    new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new TableRow({ children: [
+          headerCell('Tipo'),
+          headerCell('Esguicho Ø (mm)'),
+          headerCell('Mangueira'),
+          headerCell('Metragem (m)'),
+          headerCell('Nº Expedições')
+        ]}),
+        new TableRow({ children: [
+          cell(config.ntcbSystemType ? `Tipo ${config.ntcbSystemType}` : '-'),
+          cell(config.demandConfig?.hoseDiameter?.toString() || '25'),
+          cell(config.demandConfig?.hoseDiameter?.toString() || '25'),
+          cell(config.demandConfig?.hoseLength?.toString() || '30'),
+          cell('Simples')
+        ]})
+      ]
+    }),
+    new Paragraph({ children: [new TextRun({ text: 'BOMBA PARA O SISTEMA', bold: true, size: 18 })], spacing: { before: 200, after: 50 } }),
+    new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new TableRow({ children: [headerCell('Vazão (L/min)'), headerCell('Pressão (mca)'), headerCell('Potência (CV)')] }),
+        new TableRow({ children: [
+          cell(pump.totalFlowLmin?.toFixed(0) || config.demandConfig?.totalFlow?.toString() || '-'),
+          cell(pump.minPressure?.toFixed(2) || '-'),
+          cell(pump.commercialPowerCV?.toString() || '-')
+        ]})
+      ]
+    }),
+    new Paragraph({ children: [new TextRun({ text: 'RESERVATÓRIO', bold: true, size: 18 })], spacing: { before: 200, after: 50 } }),
+    new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new TableRow({ children: [headerCell('Volume (L)'), headerCell('Tempo Reserva (min)')] }),
+        new TableRow({ children: [
+          cell(reserve.volumeLiters?.toLocaleString() || config.demandConfig?.reserveVolume?.toLocaleString() || '-'),
+          cell(reserve.timeMinutes?.toString() || '-')
+        ]})
+      ]
+    })
+  ];
+}
+
+// Separation Table from saved calculation (NTCB 09/2020)
+function createSeparationTableFromCalc(separationCalc: any): (Paragraph | Table)[] {
+  const calculations = separationCalc?.calculations || [];
+  const buildings = separationCalc?.buildings || [];
+  
+  if (calculations.length === 0) {
+    return [];
+  }
+
+  const rows: TableRow[] = [
+    new TableRow({
+      children: [
+        headerCell('Edificação Expositora'),
+        headerCell('Edificação Em Exposição'),
+        headerCell('Dist. Exigida (m)'),
+        headerCell('Dist. Existente (m)'),
+        headerCell('Status')
+      ]
+    })
+  ];
+
+  calculations.forEach((calc: any) => {
+    const result = calc.result || {};
+    rows.push(new TableRow({
+      children: [
+        cell(result.scenario1?.expositoraName || 'Expositora', { align: AlignmentType.LEFT }),
+        cell(result.scenario1?.emExposicaoName || 'Em Exposição', { align: AlignmentType.LEFT }),
+        cell(result.minimumDistance?.toFixed(2) || '-'),
+        cell(calc.existingDistance?.toFixed(2) || '-'),
+        cell(result.isCompliant ? 'ATENDE' : 'NÃO ATENDE')
+      ]
+    }));
+  });
+
+  return [
+    new Paragraph({
+      children: [new TextRun({ text: '3.1 ISOLAMENTO DE RISCO POR CÁLCULO DE SEPARAÇÃO', bold: true, size: 20 })],
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 300, after: 100 }
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: 'Esta medida de segurança foi dimensionada atendendo à NTCB 09 do Corpo de Bombeiros Militar de Mato Grosso.', size: 18, italics: true })],
+      spacing: { after: 100 }
+    }),
+    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows })
+  ];
 }
 
 // Separation Table (NTCB 09/2020)
