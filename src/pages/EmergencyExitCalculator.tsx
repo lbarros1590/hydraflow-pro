@@ -195,16 +195,63 @@ export default function EmergencyExitCalculator() {
           description: `${savedBuildings.length} edificação(ões) com dados de saída de emergência`,
         });
       } else if (projectData) {
-        // Carregar setores do projeto
+        // Carregar edificações do projeto (estrutura correta: buildings > floors > sectors)
         const pData = projectData.data as ProjectFormData;
-        if (pData.sectors && pData.sectors.length > 0) {
+        
+        if (pData.buildings && pData.buildings.length > 0) {
+          // Converter edificações do projeto para a estrutura da calculadora
+          const convertedBuildings: EmergencyBuilding[] = pData.buildings.map((building: any) => ({
+            id: building.id || createId(),
+            name: building.name || 'Edificação',
+            floors: (building.floors || []).map((floor: any) => ({
+              id: floor.id || createId(),
+              name: floor.name || 'Pavimento',
+              sectors: (floor.sectors || []).map((sector: any) => ({
+                id: sector.id || createId(),
+                name: sector.name || 'Setor',
+                occupancyCode: sector.occupancyCode || 'C-2',
+                densityM2PerPerson: sector.densityM2PerPerson || getOccupancyDensity(sector.occupancyCode || 'C-2')?.densityM2PerPerson || 5,
+                area: sector.area || 0,
+                doors: (sector.doors || []).map((door: any) => ({
+                  id: door.id || createId(),
+                  width: door.width || 0.80,
+                  height: door.height || 2.10,
+                  quantity: door.quantity || 1,
+                  observation: door.observation || '',
+                })),
+              })),
+            })),
+          }));
+          
+          setBuildings(convertedBuildings);
+          
+          if (convertedBuildings.length > 0) {
+            setExpandedBuildings(new Set([convertedBuildings[0].id]));
+            if (convertedBuildings[0].floors.length > 0) {
+              setExpandedFloors(new Set([convertedBuildings[0].floors[0].id]));
+            }
+          }
+          
+          const totalSectors = convertedBuildings.reduce(
+            (acc, b) => acc + b.floors.reduce((fAcc, f) => fAcc + f.sectors.length, 0), 0
+          );
+          const totalDoors = convertedBuildings.reduce(
+            (acc, b) => acc + b.floors.reduce((fAcc, f) => fAcc + f.sectors.reduce((sAcc, s) => sAcc + s.doors.length, 0), 0), 0
+          );
+          
+          toast({
+            title: 'Edificações carregadas',
+            description: `${convertedBuildings.length} edificação(ões), ${totalSectors} setor(es), ${totalDoors} porta(s) importados do projeto.`,
+          });
+        } else if (pData.sectors && pData.sectors.length > 0) {
+          // Fallback: carregar setores antigos se não houver buildings
           const building: EmergencyBuilding = {
             id: createId(),
             name: pData.projectName || 'Edificação do Projeto',
             floors: [{
               id: createId(),
               name: 'Pavimento 01',
-              sectors: pData.sectors.map(sector => ({
+              sectors: pData.sectors.map((sector: any) => ({
                 id: sector.id,
                 name: sector.name,
                 occupancyCode: sector.occupancyCode || 'C-2',
