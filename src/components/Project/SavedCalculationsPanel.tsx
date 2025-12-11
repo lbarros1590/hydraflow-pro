@@ -489,7 +489,7 @@ export function SavedCalculationsPanel({ projectId }: SavedCalculationsPanelProp
                             <Button 
                               variant="ghost" 
                               size="sm"
-                              onClick={(e) => { e.stopPropagation(); navigate(`/app/projects/${projectId}/emergency-exit`); }}
+                              onClick={(e) => { e.stopPropagation(); navigate(`/app/projects/${projectId}/saidas`); }}
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
