@@ -109,7 +109,7 @@ export function AnnexGReport({ formData }: AnnexGReportProps) {
               spacing: { after: 200 }
             }),
 
-            // Table 2 - Existence Period
+            // Table 2 - Existence Period (GLOBAL)
             ...createExistencePeriodTable(formData),
 
             // Table 8 - Classification
@@ -135,9 +135,18 @@ export function AnnexGReport({ formData }: AnnexGReportProps) {
             // Section 6.2 - Vehicle Access
             ...createVehicleAccessSection(formData),
 
-            // Section 6.3.1 - Stairs
+            // Table 3.3 - Emergency Exits (NTCB 13/2020)
             new Paragraph({ children: [new PageBreak()] }),
+            ...createEmergencyExitsTable(formData),
+
+            // Section 6.3.1 - Stairs
             ...createStairsSection(formData),
+
+            // Separation Table (if multiple buildings)
+            ...(formData.buildings && formData.buildings.length > 1 ? [
+              new Paragraph({ children: [new PageBreak()] }),
+              ...createSeparationTable(formData)
+            ] : []),
 
             // Footer
             new Paragraph({
@@ -168,10 +177,10 @@ export function AnnexGReport({ formData }: AnnexGReportProps) {
   );
 }
 
-// Table 2 - Existence Period
+// Table 2 - Existence Period (GLOBAL do projeto, não por edificação)
 function createExistencePeriodTable(formData: ProjectFormData): (Paragraph | Table)[] {
-  const building = formData.buildings?.[0];
-  const selectedPeriod = building?.existencePeriod || 'pos_2023';
+  // Usa período de existência GLOBAL do projeto
+  const selectedPeriod = formData.existencePeriod || formData.buildings?.[0]?.existencePeriod || 'pos_2023';
 
   return [
     new Paragraph({
@@ -587,6 +596,137 @@ function createStairsSection(formData: ProjectFormData): (Paragraph | Table)[] {
   });
 
   return elements;
+}
+
+// Table 3.3 - Emergency Exits (NTCB 13/2020)
+function createEmergencyExitsTable(formData: ProjectFormData): (Paragraph | Table)[] {
+  const rows: TableRow[] = [
+    new TableRow({
+      children: [
+        headerCell('Pavimento/Setor'),
+        headerCell('Ocupação'),
+        headerCell('Área (m²)'),
+        headerCell('Densidade'),
+        headerCell('População'),
+        headerCell('UP Req.'),
+        headerCell('Largura Req. (m)'),
+        headerCell('Largura Exist. (m)')
+      ]
+    })
+  ];
+
+  formData.buildings?.forEach(building => {
+    building.floors?.forEach(floor => {
+      floor.sectors?.forEach(sector => {
+        const density = sector.densityM2PerPerson || 10;
+        const area = sector.area || 0;
+        // Cálculo de população arredondando para BAIXO
+        const population = Math.floor(area / density);
+        const upRequired = Math.ceil(population / 100);
+        const widthRequired = upRequired * 0.55;
+        
+        // Calcular largura existente das portas
+        const widthExisting = (sector.doors || []).reduce((sum, d) => sum + (d.width * d.quantity), 0);
+
+        rows.push(new TableRow({
+          children: [
+            cell(`${floor.name} - ${sector.name}`, { align: AlignmentType.LEFT }),
+            cell(sector.occupancyCode || '-'),
+            cell(area.toFixed(0)),
+            cell(`1/${density}`),
+            cell(String(population)),
+            cell(String(upRequired)),
+            cell(widthRequired.toFixed(2)),
+            cell(widthExisting.toFixed(2))
+          ]
+        }));
+      });
+    });
+  });
+
+  return [
+    new Paragraph({
+      children: [new TextRun({ text: 'TABELA 3.3 - SAÍDAS DE EMERGÊNCIA (NTCB 13/2020)', bold: true, size: 20 })],
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 300, after: 100 }
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: 'Capacidade por Unidade de Passagem (UP): 100 pessoas | Largura da UP: 0,55m', size: 16, italics: true })],
+      spacing: { after: 100 }
+    }),
+    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows })
+  ];
+}
+
+// Separation Table (NTCB 09/2020)
+function createSeparationTable(formData: ProjectFormData): (Paragraph | Table)[] {
+  const buildings = formData.buildings || [];
+  
+  if (buildings.length < 2) {
+    return [];
+  }
+
+  const rows: TableRow[] = [
+    new TableRow({
+      children: [
+        headerCell('Edificação A'),
+        headerCell('Edificação B'),
+        headerCell('Carga Incêndio (MJ/m²)'),
+        headerCell('Dist. Atual (m)'),
+        headerCell('Observação')
+      ]
+    })
+  ];
+
+  // Generate pairs
+  for (let i = 0; i < buildings.length; i++) {
+    for (let j = i + 1; j < buildings.length; j++) {
+      const buildingA = buildings[i];
+      const buildingB = buildings[j];
+      
+      // Calculate average fire load
+      const avgLoadA = calculateAverageFireLoad(buildingA);
+      const avgLoadB = calculateAverageFireLoad(buildingB);
+
+      rows.push(new TableRow({
+        children: [
+          cell(buildingA.name, { align: AlignmentType.LEFT }),
+          cell(buildingB.name, { align: AlignmentType.LEFT }),
+          cell(`${avgLoadA} / ${avgLoadB}`),
+          cell(formData.actualSeparationDistance?.toFixed(2) || '-'),
+          cell('Ver memorial de cálculo', { align: AlignmentType.LEFT })
+        ]
+      }));
+    }
+  }
+
+  return [
+    new Paragraph({
+      children: [new TextRun({ text: 'SEPARAÇÃO ENTRE EDIFICAÇÕES (NTCB 09/2020)', bold: true, size: 20 })],
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 300, after: 100 }
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: 'A separação entre edificações deve atender aos critérios da NTCB 09/2020.', size: 16, italics: true })],
+      spacing: { after: 100 }
+    }),
+    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows })
+  ];
+}
+
+// Helper function to calculate average fire load of a building
+function calculateAverageFireLoad(building: ProjectBuildingData): number {
+  let totalLoad = 0;
+  let sectorCount = 0;
+  
+  (building.floors || []).forEach(floor => {
+    (floor.sectors || []).forEach(sector => {
+      totalLoad += sector.fireLoad || 300;
+      sectorCount++;
+    });
+  });
+  
+  return sectorCount > 0 ? Math.round(totalLoad / sectorCount) : 300;
 }
 
 export default AnnexGReport;
