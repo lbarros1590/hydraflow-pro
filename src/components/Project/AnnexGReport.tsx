@@ -598,64 +598,103 @@ function createStairsSection(formData: ProjectFormData): (Paragraph | Table)[] {
   return elements;
 }
 
-// Table 3.3 - Emergency Exits (NTCB 13/2020)
+// Section 6.3 - Emergency Exits (NTCB 13/2020) - Formato correto conforme Anexo G.4
 function createEmergencyExitsTable(formData: ProjectFormData): (Paragraph | Table)[] {
-  const rows: TableRow[] = [
-    new TableRow({
-      children: [
-        headerCell('Pavimento/Setor'),
-        headerCell('Ocupação'),
-        headerCell('Área (m²)'),
-        headerCell('Densidade'),
-        headerCell('População'),
-        headerCell('UP Req.'),
-        headerCell('Largura Req. (m)'),
-        headerCell('Largura Exist. (m)')
-      ]
+  const elements: (Paragraph | Table)[] = [
+    new Paragraph({
+      children: [new TextRun({ text: '6.3 SAÍDAS DE EMERGÊNCIA', bold: true, size: 20 })],
+      spacing: { before: 300, after: 50 }
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: 'Esta medida de segurança foi dimensionada atendendo à NTCB 13 do Corpo de Bombeiros Militar de Mato Grosso.', size: 18, italics: true })],
+      spacing: { after: 100 }
     })
   ];
 
+  // Tabela resumo geral conforme modelo
+  const building = formData.buildings?.[0];
+  const hClass = getHeightClass(building?.totalHeight || 0);
+  const stairs = building?.stairs || [];
+  const stairTypes = stairs.map(s => s.type).join(', ') || 'NE';
+
+  elements.push(new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({ children: [
+        headerCell('EDIFICAÇÃO/SETOR'),
+        headerCell('Divisão'),
+        headerCell('Altura'),
+        headerCell('Acesso e descarga', { colspan: 2 })
+      ]}),
+      new TableRow({ children: [
+        cell(''),
+        cell(''),
+        cell(''),
+        cell('Tabela 1 - Escadas e rampas'),
+        cell('Tabela 2 - Portas')
+      ]}),
+      new TableRow({ children: [
+        cell(''),
+        cell(''),
+        cell(''),
+        cell('Tabela 3 - Tipo de Escada'),
+        cell('Qtde Saídas Existentes')
+      ]}),
+      new TableRow({ children: [
+        cell(building?.name || 'Edificação'),
+        cell(building?.floors?.[0]?.sectors?.[0]?.occupancyCode || '-'),
+        cell(hClass.heightRange),
+        cell(stairTypes),
+        cell(String(stairs.length || 1))
+      ]})
+    ]
+  }));
+
+  // Para cada setor/pavimento - tabela detalhada
   formData.buildings?.forEach(building => {
     building.floors?.forEach(floor => {
       floor.sectors?.forEach(sector => {
         const density = sector.densityM2PerPerson || 10;
         const area = sector.area || 0;
-        // Cálculo de população arredondando para BAIXO
         const population = Math.floor(area / density);
         const upRequired = Math.ceil(population / 100);
         const widthRequired = upRequired * 0.55;
-        
-        // Calcular largura existente das portas
         const widthExisting = (sector.doors || []).reduce((sum, d) => sum + (d.width * d.quantity), 0);
+        
+        // Calcular portas existentes
+        const doorsExisting = (sector.doors || []).map(d => 
+          `${d.quantity} porta(s) de ${d.width.toFixed(2)}m`
+        ).join(', ') || '-';
 
-        rows.push(new TableRow({
-          children: [
-            cell(`${floor.name} - ${sector.name}`, { align: AlignmentType.LEFT }),
-            cell(sector.occupancyCode || '-'),
-            cell(area.toFixed(0)),
-            cell(`1/${density}`),
-            cell(String(population)),
-            cell(String(upRequired)),
-            cell(widthRequired.toFixed(2)),
-            cell(widthExisting.toFixed(2))
+        elements.push(new Paragraph({
+          children: [new TextRun({ text: `${floor.name} – ${sector.name} – ${sector.occupancyCode || 'Divisão'} – 1 Pessoa/${density} m²`, bold: true, size: 18 })],
+          spacing: { before: 200, after: 50 }
+        }));
+
+        elements.push(new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [
+            new TableRow({ children: [
+              headerCell('Área computada (m²)'),
+              headerCell('População'),
+              headerCell('Capacidade UP - C'),
+              headerCell('Exigido'),
+              headerCell('Existente')
+            ]}),
+            new TableRow({ children: [
+              cell(area.toFixed(2)),
+              cell(String(population)),
+              cell('100 pessoas'),
+              cell(`${upRequired} UP (${widthRequired.toFixed(2)}m)`),
+              cell(`${doorsExisting} (${widthExisting.toFixed(2)}m)`)
+            ]})
           ]
         }));
       });
     });
   });
 
-  return [
-    new Paragraph({
-      children: [new TextRun({ text: 'TABELA 3.3 - SAÍDAS DE EMERGÊNCIA (NTCB 13/2020)', bold: true, size: 20 })],
-      alignment: AlignmentType.CENTER,
-      spacing: { before: 300, after: 100 }
-    }),
-    new Paragraph({
-      children: [new TextRun({ text: 'Capacidade por Unidade de Passagem (UP): 100 pessoas | Largura da UP: 0,55m', size: 16, italics: true })],
-      spacing: { after: 100 }
-    }),
-    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows })
-  ];
+  return elements;
 }
 
 // Separation Table (NTCB 09/2020)

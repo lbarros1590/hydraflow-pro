@@ -314,7 +314,7 @@ export function SavedCalculationsPanel({ projectId }: SavedCalculationsPanelProp
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <CardContent>
-                        {calculations && calculations.length > 0 ? (
+                        {calculations && Array.isArray(calculations) && calculations.length > 0 ? (
                           <Table>
                             <TableHeader>
                               <TableRow>
@@ -326,10 +326,14 @@ export function SavedCalculationsPanel({ projectId }: SavedCalculationsPanelProp
                             <TableBody>
                               {calculations.map((c: any, idx: number) => (
                                 <TableRow key={idx}>
-                                  <TableCell>{c.buildingA} ↔ {c.buildingB}</TableCell>
-                                  <TableCell className="text-right font-mono">{c.requiredDistance?.toFixed(2) || '-'}m</TableCell>
+                                  <TableCell>
+                                    {c.buildingAName || c.buildingA || 'Edificação A'} ↔ {c.buildingBName || c.buildingB || 'Edificação B'}
+                                  </TableCell>
+                                  <TableCell className="text-right font-mono">
+                                    {(c.requiredDistance || c.distanceRequired || c.separationRequired)?.toFixed(2) || '-'}m
+                                  </TableCell>
                                   <TableCell className="text-center">
-                                    {c.isCompliant ? (
+                                    {c.isCompliant || c.compliant ? (
                                       <CheckCircle className="h-5 w-5 text-success mx-auto" />
                                     ) : (
                                       <XCircle className="h-5 w-5 text-destructive mx-auto" />
@@ -339,6 +343,15 @@ export function SavedCalculationsPanel({ projectId }: SavedCalculationsPanelProp
                               ))}
                             </TableBody>
                           </Table>
+                        ) : buildings && Array.isArray(buildings) && buildings.length > 0 ? (
+                          <div className="space-y-2">
+                            <p className="text-sm text-muted-foreground">Edificações cadastradas:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {buildings.map((b: any, idx: number) => (
+                                <Badge key={idx} variant="outline">{b.name || `Edificação ${idx + 1}`}</Badge>
+                              ))}
+                            </div>
+                          </div>
                         ) : (
                           <p className="text-muted-foreground text-sm">Dados detalhados não disponíveis</p>
                         )}
