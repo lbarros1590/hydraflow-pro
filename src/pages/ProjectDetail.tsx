@@ -34,6 +34,7 @@ import { ShareProjectDialog } from '@/components/Sharing/ShareProjectDialog';
 import { EmergencyExitResults } from '@/components/Project/EmergencyExitResults';
 import { SeparationResults } from '@/components/Project/SeparationResults';
 import { AnnexGReport } from '@/components/Project/AnnexGReport';
+import { SavedCalculationsPanel } from '@/components/Project/SavedCalculationsPanel';
 
 interface Project {
   id: string;
@@ -349,6 +350,10 @@ export default function ProjectDetail() {
         </TabsContent>
 
         <TabsContent value="calculations" className="mt-6 space-y-6">
+          {/* Cálculos Salvos */}
+          <SavedCalculationsPanel projectId={id!} />
+          
+          {/* Cálculos em tempo real (baseado nos dados do projeto) */}
           <EmergencyExitResults 
             buildings={data.buildings || []} 
             projectName={data.projectName} 

@@ -1,5 +1,5 @@
 /**
- * Step 4 - Mandatory & Voluntary Measures Checklist + Vehicle Access
+ * Step 4 - Mandatory & Voluntary Measures Checklist + Vehicle Access + Existence Period
  */
 import { useMemo } from 'react';
 import { UseFormReturn } from 'react-hook-form';
@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { 
   ClipboardCheck, 
   Shield, 
@@ -33,9 +35,11 @@ import {
   KeyRound,
   FileText,
   Truck,
-  Trash2
+  Trash2,
+  Calendar
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { EXISTENCE_PERIODS } from '@/components/Project/AnnexGReportData';
 
 interface MeasuresStepProps {
   form: UseFormReturn<ProjectFormData>;
@@ -186,6 +190,45 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
           </span>
         </AlertDescription>
       </Alert>
+
+      {/* Existence Period Card - GLOBAL for the project */}
+      <Card className="border-amber-500/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-amber-600" />
+            Período de Existência (Tabela 2 - NTCB 01)
+          </CardTitle>
+          <CardDescription>
+            Classificação global do projeto quanto ao período de existência da edificação
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FormField
+            control={form.control}
+            name="existencePeriod"
+            render={({ field }) => (
+              <FormItem>
+                <FormControl>
+                  <RadioGroup
+                    onValueChange={field.onChange}
+                    value={field.value || 'pos_2023'}
+                    className="space-y-2"
+                  >
+                    {EXISTENCE_PERIODS.map((period) => (
+                      <div key={period.id} className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+                        <RadioGroupItem value={period.id} id={period.id} />
+                        <Label htmlFor={period.id} className="cursor-pointer flex-1">
+                          {period.label}
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        </CardContent>
+      </Card>
 
       {/* Mandatory Measures Card */}
       <Card>

@@ -19,11 +19,11 @@ const CAPACITY_PER_UP = 100; // Capacidade por UP (pessoas)
 
 /**
  * Calcula a população de um setor
- * População = Área / Densidade (arredondado para cima)
+ * População = Área / Densidade (arredondado para BAIXO conforme NTCB)
  */
 export function calculatePopulation(area: number, densityM2PerPerson: number): number {
   if (area <= 0 || densityM2PerPerson <= 0) return 0;
-  return Math.ceil(area / densityM2PerPerson);
+  return Math.floor(area / densityM2PerPerson);
 }
 
 /**
