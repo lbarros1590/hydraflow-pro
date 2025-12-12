@@ -363,6 +363,48 @@ export type Database = {
           },
         ]
       }
+      regulation_activities: {
+        Row: {
+          code: string
+          created_at: string | null
+          description: string
+          fire_load_unit: string
+          fire_load_value: number
+          id: string
+          is_risk_determinant: boolean
+          occupancy_division: string
+          occupancy_group: string
+          state_iso: string
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          description: string
+          fire_load_unit?: string
+          fire_load_value: number
+          id?: string
+          is_risk_determinant?: boolean
+          occupancy_division: string
+          occupancy_group: string
+          state_iso?: string
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          description?: string
+          fire_load_unit?: string
+          fire_load_value?: number
+          id?: string
+          is_risk_determinant?: boolean
+          occupancy_division?: string
+          occupancy_group?: string
+          state_iso?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       separation_calculations: {
         Row: {
           buildings: Json | null

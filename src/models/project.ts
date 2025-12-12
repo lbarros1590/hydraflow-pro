@@ -27,6 +27,9 @@ export interface BuildingSector {
 
 export type RiskClass = 'baixo' | 'medio' | 'alto';
 
+// TAREFA 2: Tipos de projeto para reforma/ampliação
+export type ProjectType = 'new' | 'reform' | 'expansion' | 'substitution';
+
 export interface ProjectConfig {
   // Identificação
   projectName: string;
@@ -36,8 +39,14 @@ export interface ProjectConfig {
   city?: string;
   state?: string;
   
+  // TAREFA 2: Tipo de projeto e versão da norma
+  projectType: ProjectType;           // Novo, Reforma, Ampliação, Substituição
+  regulationVersion: string;          // Ex: 'NTCB-2025', 'NTCB-2020'
+  
   // Dados gerais da edificação
   totalArea: number;            // Área total construída em m²
+  existingArea?: number;        // Área já construída (para reforma/ampliação)
+  expansionArea?: number;       // Área a ampliar (para ampliação)
   totalHeight: number;          // Altura total em metros
   numberOfFloors: number;       // Número total de pavimentos
   yearBuilt?: number;           // Ano de construção

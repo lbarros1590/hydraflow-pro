@@ -167,6 +167,14 @@ export const sectorSchema = z.object({
 
 export type SectorFormData = z.infer<typeof sectorSchema>;
 
+// TAREFA 2: Tipo de projeto para reforma/ampliação
+export const projectTypeOptions = [
+  { value: 'new', label: 'Construção Nova' },
+  { value: 'reform', label: 'Reforma' },
+  { value: 'expansion', label: 'Ampliação' },
+  { value: 'substitution', label: 'Substituição de PSCIP' },
+] as const;
+
 export const projectFormSchema = z.object({
   // Step 1 - Identification
   projectName: z.string().min(1, 'Nome do projeto é obrigatório'),
@@ -177,6 +185,12 @@ export const projectFormSchema = z.object({
   state: z.string().default('MT'),
   stateCode: z.string().default('MT'),
   processType: z.enum(['pscip', 'simplificado', 'evento']),
+  
+  // TAREFA 2: Tipo de projeto e áreas
+  projectType: z.enum(['new', 'reform', 'expansion', 'substitution']).default('new'),
+  regulationVersion: z.string().default('NTCB-2025'),
+  existingArea: z.number().min(0).optional(),  // Área já construída
+  expansionArea: z.number().min(0).optional(), // Área a ampliar
   
   // Step 2 - Geometry & Risk
   totalHeight: z.number().min(0, 'Altura deve ser maior ou igual a 0'),
