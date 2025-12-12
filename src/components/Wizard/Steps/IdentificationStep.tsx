@@ -1,16 +1,17 @@
 /**
  * Step 1 - Project Identification with State Selection
+ * TAREFA 3: Adicionado campos para Tipo de Projeto e Áreas (Reforma/Ampliação)
  */
 import { useEffect, useState } from 'react';
 import { UseFormReturn } from 'react-hook-form';
-import { ProjectFormData, processTypeOptions } from '../types';
+import { ProjectFormData, processTypeOptions, projectTypeOptions } from '../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Building2, User, MapPin, Globe, Info } from 'lucide-react';
+import { Building2, User, MapPin, Globe, Info, FileEdit, Calculator } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface IdentificationStepProps {
@@ -28,6 +29,9 @@ export function IdentificationStep({ form }: IdentificationStepProps) {
   const [states, setStates] = useState<AvailableState[]>([]);
   const [loading, setLoading] = useState(true);
   const selectedState = form.watch('stateCode');
+  const projectType = form.watch('projectType');
+  const existingArea = form.watch('existingArea') || 0;
+  const expansionArea = form.watch('expansionArea') || 0;
 
   useEffect(() => {
     async function fetchStates() {
@@ -44,8 +48,19 @@ export function IdentificationStep({ form }: IdentificationStepProps) {
     fetchStates();
   }, []);
 
+  // Auto-calculate total area for reform/expansion projects
+  useEffect(() => {
+    if (projectType === 'expansion' || projectType === 'reform') {
+      const calculatedTotal = existingArea + expansionArea;
+      if (calculatedTotal > 0) {
+        form.setValue('totalArea', calculatedTotal);
+      }
+    }
+  }, [projectType, existingArea, expansionArea, form]);
+
   const currentState = states.find(s => s.code === selectedState);
   const isStateActive = currentState?.is_active ?? false;
+  const showAreaFields = projectType === 'reform' || projectType === 'expansion';
 
   return (
     <div className="space-y-6 pb-24">
@@ -70,10 +85,11 @@ export function IdentificationStep({ form }: IdentificationStepProps) {
                 <Select 
                   onValueChange={(value) => {
                     field.onChange(value);
-                    // Also update the state field for display
                     const state = states.find(s => s.code === value);
                     if (state) {
                       form.setValue('state', state.code);
+                      // Update regulation version based on state
+                      form.setValue('regulationVersion', state.regulations_version || 'NTCB-2025');
                     }
                   }} 
                   value={field.value}
@@ -121,6 +137,134 @@ export function IdentificationStep({ form }: IdentificationStepProps) {
                 Usando normas de <strong>{currentState.name}</strong> - Versão {currentState.regulations_version}
               </AlertDescription>
             </Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* TAREFA 3: Project Type Card */}
+      <Card className="border-blue-500/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileEdit className="h-5 w-5 text-blue-600" />
+            Tipo de Projeto
+          </CardTitle>
+          <CardDescription>
+            Defina se é uma construção nova, reforma ou ampliação
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <FormField
+            control={form.control}
+            name="projectType"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tipo de Projeto *</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value || 'new'}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {projectTypeOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  {projectType === 'new' && 'Projeto para edificação totalmente nova.'}
+                  {projectType === 'reform' && 'Projeto para reforma de edificação existente.'}
+                  {projectType === 'expansion' && 'Projeto para ampliação de edificação existente.'}
+                  {projectType === 'substitution' && 'Substituição de PSCIP anterior.'}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Area fields for reform/expansion */}
+          {showAreaFields && (
+            <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-dashed">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Calculator className="h-4 w-4" />
+                Cálculo de Áreas
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField
+                  control={form.control}
+                  name="existingArea"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Área Existente (m²)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01"
+                          placeholder="0.00" 
+                          {...field}
+                          onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                          value={field.value || ''}
+                        />
+                      </FormControl>
+                      <FormDescription className="text-xs">
+                        Área já construída
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="expansionArea"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {projectType === 'reform' ? 'Área de Reforma (m²)' : 'Área a Ampliar (m²)'}
+                      </FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01"
+                          placeholder="0.00" 
+                          {...field}
+                          onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                          value={field.value || ''}
+                        />
+                      </FormControl>
+                      <FormDescription className="text-xs">
+                        {projectType === 'reform' ? 'Área a reformar' : 'Nova área a construir'}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormItem>
+                  <FormLabel>Área Total (m²)</FormLabel>
+                  <Input 
+                    type="number" 
+                    value={(existingArea + expansionArea).toFixed(2)}
+                    disabled 
+                    className="bg-muted font-semibold"
+                  />
+                  <FormDescription className="text-xs">
+                    Calculado automaticamente
+                  </FormDescription>
+                </FormItem>
+              </div>
+
+              <Alert className="border-blue-500/30 bg-blue-500/5">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-blue-700 text-sm">
+                  Para projetos de {projectType === 'reform' ? 'reforma' : 'ampliação'}, 
+                  a Área Total será preenchida na <strong>Tabela 1 - Apresentação</strong> do Anexo G.
+                </AlertDescription>
+              </Alert>
+            </div>
           )}
         </CardContent>
       </Card>

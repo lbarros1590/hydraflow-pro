@@ -1,7 +1,7 @@
 /**
  * Step 4 - Mandatory & Voluntary Measures Checklist + Vehicle Access + Existence Period
  */
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { ProjectFormData, ALL_MEASURES } from '../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   ClipboardCheck, 
   Shield, 
@@ -40,6 +41,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { EXISTENCE_PERIODS } from '@/components/Project/AnnexGReportData';
+import { getMandatoryMeasures, type RequirementWarning } from '@/engine/requirementsMatrix';
 
 interface MeasuresStepProps {
   form: UseFormReturn<ProjectFormData>;
@@ -59,52 +61,45 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
   const voluntaryMeasures = form.watch('voluntaryMeasures') || [];
   const vehicleAccess = form.watch('vehicleAccess') || { roads: [], gates: [] };
 
-  // Calculate mandatory measures based on project data
+  // TAREFA 5: Calculate mandatory measures using the new requirementsMatrix engine
   const analysis = useMemo(() => {
     const maxFireLoad = sectors.length > 0 
       ? Math.max(...sectors.map(s => s.fireLoad || 300))
       : 300;
 
-    // Determine risk class
-    let riskClass: 'baixo' | 'medio' | 'alto' = 'baixo';
-    if (maxFireLoad > 1200 || specialRisks.length > 0) riskClass = 'alto';
-    else if (maxFireLoad > 300) riskClass = 'medio';
+    // Get first sector's division code
+    const primaryDivision = sectors.length > 0 ? (sectors[0].occupancyCode || 'C-2') : 'C-2';
 
-    // Determine mandatory measures based on NTCB 01/2025
-    const mandatory: string[] = ['extintores', 'sinalizacao', 'iluminacao', 'saidas'];
+    // Use the new getMandatoryMeasures function
+    const result = getMandatoryMeasures({
+      area: totalArea,
+      height: totalHeight,
+      division: primaryDivision,
+      state: 'MT',
+      fireLoad: maxFireLoad,
+      hasBasement: specialRisks.includes('subsolo'),
+      specialRisks: specialRisks,
+    });
 
-    // Area-based requirements
-    if (totalArea > 750 || riskClass !== 'baixo') {
-      mandatory.push('alarme');
-    }
-    if (totalArea > 1500 || totalHeight > 12 || riskClass === 'alto') {
-      mandatory.push('hidrantes');
-    }
-    if (totalArea > 5000 || totalHeight > 30 || riskClass === 'alto') {
-      mandatory.push('spk');
-      mandatory.push('deteccao');
-    }
-    if (totalArea > 10000 || totalHeight > 60) {
-      mandatory.push('chuveiros');
-    }
-    if (totalArea > 2000) {
-      mandatory.push('brigada');
-      mandatory.push('ppcip');
-    }
-
-    // Special risk requirements
-    if (specialRisks.includes('glp') || specialRisks.includes('inflamaveis')) {
-      if (!mandatory.includes('deteccao')) mandatory.push('deteccao');
-      if (!mandatory.includes('alarme')) mandatory.push('alarme');
-    }
-    if (specialRisks.includes('subsolo')) {
-      if (!mandatory.includes('hidrantes')) mandatory.push('hidrantes');
-    }
+    // Map MandatoryMeasures to the legacy string array format
+    const mandatory: string[] = [];
+    if (result.measures.fireExtinguishers) mandatory.push('extintores');
+    if (result.measures.safetySignage) mandatory.push('sinalizacao');
+    if (result.measures.emergencyLighting) mandatory.push('iluminacao');
+    if (result.measures.emergencyExits) mandatory.push('saidas');
+    if (result.measures.fireAlarm) mandatory.push('alarme');
+    if (result.measures.hydrants) mandatory.push('hidrantes');
+    if (result.measures.automaticSprinklers) mandatory.push('spk');
+    if (result.measures.smokeDetection) mandatory.push('deteccao');
+    if (result.measures.brigadeTraining) mandatory.push('brigada');
+    if (result.measures.emergencyPlan) mandatory.push('ppcip');
 
     return {
       mandatory: [...new Set(mandatory)],
-      riskClass,
+      riskClass: result.summary.riskClass,
       maxFireLoad,
+      warnings: result.warnings,
+      heightClass: result.summary.heightClass,
     };
   }, [sectors, totalArea, totalHeight, specialRisks]);
 

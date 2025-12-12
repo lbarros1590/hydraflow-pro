@@ -44,6 +44,8 @@ export function ReviewStep({ form }: ReviewStepProps) {
     // Build project config for requirements
     const projectConfig: ProjectConfig = {
       projectName: formData.projectName || '',
+      projectType: (formData as any).projectType || 'new',
+      regulationVersion: (formData as any).regulationVersion || 'NTCB-2025',
       totalArea: formData.totalArea || totalArea,
       totalHeight: formData.totalHeight || 0,
       numberOfFloors: 1,
