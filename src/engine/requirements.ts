@@ -1,11 +1,12 @@
 /**
  * Motor de Regras para Exigências de Proteção contra Incêndio
  * Baseado em NTCB 01/2025 (Tabela 6A)
+ * 
+ * REFATORADO: Removida dependência de ntcbData.ts
+ * Agora usa fireLoad diretamente do BuildingSector (vindo do banco regulation_activities)
  */
 
 import type { ProjectConfig, MandatoryMeasures, BuildingSector, RiskClass } from '../models/project';
-import { OCCUPANCY_DIVISIONS } from '../core/ntcbClassification';
-import { getTypicalFireLoad } from '../core/ntcbData';
 
 // ============================================
 // CONSTANTES DE LIMITES (NTCB 01/2025)
@@ -33,6 +34,10 @@ const LIMITS = {
   // Compartimentação
   COMPARTMENT_MIN_AREA: 2500,
   COMPARTMENT_MIN_HEIGHT: 12,
+  
+  // Classificação de risco por carga de incêndio (MJ/m²)
+  FIRE_LOAD_LOW_MAX: 300,
+  FIRE_LOAD_MEDIUM_MAX: 1200,
 };
 
 // ============================================
@@ -41,14 +46,18 @@ const LIMITS = {
 
 /**
  * Determina a classe de risco predominante
+ * REFATORADO: Usa fireLoad do setor (vindo do banco) em vez de consultar arquivo estático
  */
 export function determineRiskClass(sectors: BuildingSector[]): RiskClass {
   if (sectors.length === 0) return 'baixo';
   
   const risks = sectors.map(sector => {
-    const fireLoad = sector.fireLoad ?? getTypicalFireLoad(sector.occupancyCode);
-    if (fireLoad <= 300) return 'baixo';
-    if (fireLoad <= 1200) return 'medio';
+    // Usa fireLoad do setor (que veio da seleção no banco regulation_activities)
+    // Se não houver, assume risco médio como fallback seguro
+    const fireLoad = sector.fireLoad ?? 700;
+    
+    if (fireLoad <= LIMITS.FIRE_LOAD_LOW_MAX) return 'baixo';
+    if (fireLoad <= LIMITS.FIRE_LOAD_MEDIUM_MAX) return 'medio';
     return 'alto';
   });
   
