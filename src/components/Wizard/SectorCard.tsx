@@ -1,9 +1,9 @@
 /**
  * Sector Card Component - Individual sector form
  */
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { UseFormReturn, useWatch } from 'react-hook-form';
-import { Trash2, Building, ChevronDown, ChevronUp, Search, Edit2 } from 'lucide-react';
+import { Trash2, Building, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   FormField,
   FormItem,
@@ -14,32 +14,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { OCCUPANCY_DIVISIONS, OCCUPANCY_GROUPS } from '@/core/ntcbClassification';
-import { CNAE_MAPPING, FIRE_LOAD_BY_OCCUPANCY, POPULATION_PARAMS } from '@/core/ntcbData';
+import { OccupancySelector } from '@/components/Project/OccupancySelector';
+import { POPULATION_PARAMS } from '@/core/ntcbData';
 import { ProjectFormData } from './types';
 
 interface SectorCardProps {
@@ -51,29 +30,11 @@ interface SectorCardProps {
 
 export function SectorCard({ index, form, onRemove, canRemove }: SectorCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
-  const [cnaeOpen, setCnaeOpen] = useState(false);
-  const [cnaeSearch, setCnaeSearch] = useState('');
-  const [selectionMode, setSelectionMode] = useState<'cnae' | 'manual'>('manual');
 
   const sectorValues = useWatch({
     control: form.control,
     name: `sectors.${index}`,
   });
-
-  const filteredCNAEs = useMemo(() => {
-    if (!cnaeSearch) return CNAE_MAPPING.slice(0, 20);
-    const search = cnaeSearch.toLowerCase();
-    return CNAE_MAPPING.filter(
-      (cnae) =>
-        cnae.code.toLowerCase().includes(search) ||
-        cnae.description.toLowerCase().includes(search)
-    ).slice(0, 20);
-  }, [cnaeSearch]);
-
-  const getFireLoadForDivision = (code: string): number => {
-    const fireLoad = FIRE_LOAD_BY_OCCUPANCY.find((f) => f.occupancyCode === code);
-    return fireLoad?.fireLoadMJm2 || 500;
-  };
 
   const getPopulationParams = (code: string) => {
     return POPULATION_PARAMS[code];
@@ -94,32 +55,22 @@ export function SectorCard({ index, form, onRemove, canRemove }: SectorCardProps
     return Math.ceil(area / 10); // fallback
   };
 
-  const handleCNAESelect = (cnae: typeof CNAE_MAPPING[0]) => {
-    const division = cnae.suggestedDivisions[0];
-    const occupancy = OCCUPANCY_DIVISIONS.find((d) => d.code === division);
-    
-    form.setValue(`sectors.${index}.cnaeCode`, cnae.code);
-    form.setValue(`sectors.${index}.occupancyCode`, division);
-    form.setValue(`sectors.${index}.occupancyName`, occupancy?.name || '');
-    form.setValue(`sectors.${index}.fireLoad`, cnae.defaultFireLoad || getFireLoadForDivision(division));
-    
-    const area = sectorValues?.area || 0;
-    if (area > 0 && !sectorValues?.populationOverride) {
-      form.setValue(`sectors.${index}.population`, calculatePopulation(area, division));
+  const handleOccupancySelect = (selection: {
+    occupancyCode: string;
+    occupancyName: string;
+    fireLoad: number;
+    cnaeCode?: string;
+  }) => {
+    form.setValue(`sectors.${index}.occupancyCode`, selection.occupancyCode);
+    form.setValue(`sectors.${index}.occupancyName`, selection.occupancyName);
+    form.setValue(`sectors.${index}.fireLoad`, selection.fireLoad);
+    if (selection.cnaeCode) {
+      form.setValue(`sectors.${index}.cnaeCode`, selection.cnaeCode);
     }
     
-    setCnaeOpen(false);
-  };
-
-  const handleDivisionSelect = (code: string) => {
-    const occupancy = OCCUPANCY_DIVISIONS.find((d) => d.code === code);
-    form.setValue(`sectors.${index}.occupancyCode`, code);
-    form.setValue(`sectors.${index}.occupancyName`, occupancy?.name || '');
-    form.setValue(`sectors.${index}.fireLoad`, getFireLoadForDivision(code));
-    
     const area = sectorValues?.area || 0;
     if (area > 0 && !sectorValues?.populationOverride) {
-      form.setValue(`sectors.${index}.population`, calculatePopulation(area, code));
+      form.setValue(`sectors.${index}.population`, calculatePopulation(area, selection.occupancyCode));
     }
   };
 
@@ -217,105 +168,16 @@ export function SectorCard({ index, form, onRemove, canRemove }: SectorCardProps
 
             {/* Activity Selection */}
             <div className="space-y-3">
-              <FormLabel>Seleção de Atividade</FormLabel>
-              <Tabs value={selectionMode} onValueChange={(v) => setSelectionMode(v as 'cnae' | 'manual')}>
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="cnae" className="flex items-center gap-2">
-                    <Search className="h-4 w-4" />
-                    Buscar por CNAE
-                  </TabsTrigger>
-                  <TabsTrigger value="manual" className="flex items-center gap-2">
-                    <Edit2 className="h-4 w-4" />
-                    Seleção Manual
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="cnae" className="space-y-3">
-                  <Popover open={cnaeOpen} onOpenChange={setCnaeOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={cnaeOpen}
-                        className="w-full justify-between"
-                      >
-                        {sectorValues?.cnaeCode
-                          ? `${sectorValues.cnaeCode} - ${CNAE_MAPPING.find((c) => c.code === sectorValues.cnaeCode)?.description?.slice(0, 40)}...`
-                          : 'Buscar código CNAE...'}
-                        <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0 bg-background border z-50" align="start">
-                      <Command>
-                        <CommandInput
-                          placeholder="Digite o CNAE ou descrição..."
-                          value={cnaeSearch}
-                          onValueChange={setCnaeSearch}
-                        />
-                        <CommandList>
-                          <CommandEmpty>Nenhum CNAE encontrado.</CommandEmpty>
-                          <CommandGroup>
-                            {filteredCNAEs.map((cnae) => (
-                              <CommandItem
-                                key={cnae.code}
-                                value={cnae.code}
-                                onSelect={() => handleCNAESelect(cnae)}
-                              >
-                                <div className="flex flex-col">
-                                  <span className="font-medium">{cnae.code}</span>
-                                  <span className="text-sm text-muted-foreground truncate max-w-[350px]">
-                                    {cnae.description}
-                                  </span>
-                                  <div className="flex gap-1 mt-1">
-                                    {cnae.suggestedDivisions.map((div) => (
-                                      <Badge key={div} variant="secondary" className="text-xs">
-                                        {div}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </TabsContent>
-
-                <TabsContent value="manual" className="space-y-3">
-                  <FormField
-                    control={form.control}
-                    name={`sectors.${index}.occupancyCode`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <Select onValueChange={handleDivisionSelect} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione a divisão" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-background border z-50 max-h-[300px]">
-                            {OCCUPANCY_GROUPS.map((group) => (
-                              <div key={group.group}>
-                                <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
-                                  Grupo {group.group} - {group.name}
-                                </div>
-                                {OCCUPANCY_DIVISIONS.filter((d) => d.group === group.group).map((division) => (
-                                  <SelectItem key={division.code} value={division.code}>
-                                    {division.code} - {division.name}
-                                  </SelectItem>
-                                ))}
-                              </div>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </TabsContent>
-              </Tabs>
+              <FormLabel>Seleção de Atividade/Ocupação</FormLabel>
+              <OccupancySelector
+                value={sectorValues?.occupancyCode}
+                onSelect={handleOccupancySelect}
+              />
+              {sectorValues?.cnaeCode && (
+                <p className="text-xs text-muted-foreground">
+                  CNAE: {sectorValues.cnaeCode}
+                </p>
+              )}
             </div>
 
             {/* Calculated Fields */}

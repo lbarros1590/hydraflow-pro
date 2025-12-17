@@ -507,30 +507,63 @@ export function SavedCalculationsPanel({ projectId }: SavedCalculationsPanelProp
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <CardContent>
-                        {results ? (
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="p-3 rounded-lg bg-muted/50">
-                              <p className="text-sm text-muted-foreground">População Total</p>
-                              <p className="font-mono font-bold">{results.totalPopulation || '-'}</p>
+                        {(() => {
+                          // Calculate aggregated totals from building results
+                          let totalPopulation = 0;
+                          let totalUpRequired = 0;
+                          let totalWidthRequired = 0;
+                          let allCompliant = true;
+                          let hasData = false;
+
+                          if (results) {
+                            // Handle both direct results and nested building results
+                            if (results.totalPopulation !== undefined) {
+                              // Direct format
+                              totalPopulation = results.totalPopulation || 0;
+                              totalUpRequired = results.totalUpRequired || 0;
+                              totalWidthRequired = results.totalWidthRequired || 0;
+                              allCompliant = results.isCompliant ?? true;
+                              hasData = true;
+                            } else {
+                              // Nested format with building results
+                              const buildingResults = Object.values(results);
+                              buildingResults.forEach((b: any) => {
+                                if (b && typeof b === 'object') {
+                                  totalPopulation += b.totalPopulation || 0;
+                                  totalUpRequired += b.totalUpRequired || b.upRequired || 0;
+                                  totalWidthRequired = Math.max(totalWidthRequired, b.totalWidthRequired || b.widthRequired || 0);
+                                  if (b.isCompliant === false) allCompliant = false;
+                                  hasData = true;
+                                }
+                              });
+                            }
+                          }
+
+                          return hasData ? (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              <div className="p-3 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground">População Total</p>
+                                <p className="font-mono font-bold">{totalPopulation || '-'}</p>
+                              </div>
+                              <div className="p-3 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground">UPs Necessárias</p>
+                                <p className="font-mono font-bold">{totalUpRequired || '-'}</p>
+                              </div>
+                              <div className="p-3 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground">Largura Req.</p>
+                                <p className="font-mono font-bold">{totalWidthRequired > 0 ? totalWidthRequired.toFixed(2) : '-'}m</p>
+                              </div>
+                              <div className="p-3 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground">Status</p>
+                                <p className={`font-bold ${allCompliant ? 'text-green-600' : 'text-destructive'}`}>
+                                  {allCompliant ? 'Conforme' : 'Não Conforme'}
+                                </p>
+                              </div>
                             </div>
-                            <div className="p-3 rounded-lg bg-muted/50">
-                              <p className="text-sm text-muted-foreground">UPs Necessárias</p>
-                              <p className="font-mono font-bold">{results.totalUpRequired || '-'}</p>
-                            </div>
-                            <div className="p-3 rounded-lg bg-muted/50">
-                              <p className="text-sm text-muted-foreground">Largura Req.</p>
-                              <p className="font-mono font-bold">{results.totalWidthRequired?.toFixed(2) || '-'}m</p>
-                            </div>
-                            <div className="p-3 rounded-lg bg-muted/50">
-                              <p className="text-sm text-muted-foreground">Status</p>
-                              <p className={`font-bold ${results.isCompliant ? 'text-success' : 'text-destructive'}`}>
-                                {results.isCompliant ? 'Conforme' : 'Não Conforme'}
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-muted-foreground text-sm">Dados detalhados não disponíveis</p>
-                        )}
+                          ) : (
+                            <p className="text-muted-foreground text-sm">Dados detalhados não disponíveis</p>
+                          );
+                        })()}
                       </CardContent>
                     </CollapsibleContent>
                   </Card>

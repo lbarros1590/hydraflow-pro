@@ -34,8 +34,7 @@ interface BuildingExtendedDataProps {
 
 export function BuildingExtendedData({ form, buildingIndex }: BuildingExtendedDataProps) {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    classification: true,
-    fireResistance: false,
+    fireResistance: true,
     stairs: false,
   });
 
@@ -119,103 +118,6 @@ export function BuildingExtendedData({ form, buildingIndex }: BuildingExtendedDa
 
   return (
     <div className="space-y-3 mt-4">
-      {/* Classification Section */}
-      <Collapsible open={openSections.classification} onOpenChange={() => toggleSection('classification')}>
-        <Card className="border-primary/20">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="py-3 cursor-pointer hover:bg-muted/30 transition-colors">
-              <CardTitle className="text-sm flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Ruler className="h-4 w-4 text-primary" />
-                  Classificação NTCB 01/2025
-                </span>
-                {openSections.classification ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </CardTitle>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="pt-0 space-y-4">
-              {/* Existence Period */}
-              <FormField
-                control={form.control}
-                name={`buildings.${buildingIndex}.existencePeriod`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs">Período de Existência (Tabela 2 - Anexo A.3)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || 'pos_2023'}>
-                      <FormControl>
-                        <SelectTrigger className="h-8 text-sm">
-                          <SelectValue placeholder="Selecione o período" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {EXISTENCE_PERIODS.map(period => (
-                          <SelectItem key={period.id} value={period.id}>
-                            {period.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )}
-              />
-
-              {/* Height */}
-              <div className="grid grid-cols-2 gap-3">
-                <FormField
-                  control={form.control}
-                  name={`buildings.${buildingIndex}.totalHeight`}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs">Altura Total (m)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          className="h-8 text-sm"
-                          placeholder="0.00"
-                          {...field}
-                          onChange={e => {
-                            const value = parseFloat(e.target.value) || 0;
-                            field.onChange(value);
-                            const hClass = getHeightClass(value);
-                            form.setValue(`buildings.${buildingIndex}.heightClassType`, hClass.type);
-                          }}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <div className="space-y-1">
-                  <p className="text-xs font-medium">Classificação (Tabela 9)</p>
-                  <div className="h-8 flex items-center gap-2">
-                    <Badge variant="default">Tipo {heightClass.type}</Badge>
-                    <span className="text-xs text-muted-foreground">{heightClass.name}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Fire Risk Summary */}
-              <div className="p-3 rounded-lg bg-muted/50 space-y-2">
-                <p className="text-xs font-medium flex items-center gap-2">
-                  <Flame className="h-3 w-3 text-orange-500" />
-                  Carga de Incêndio (Tabela 10)
-                </p>
-                <div className="flex items-center gap-4">
-                  <div>
-                    <span className="text-sm font-mono">{maxFireLoad}</span>
-                    <span className="text-xs text-muted-foreground ml-1">MJ/m² (maior setor)</span>
-                  </div>
-                  <Badge variant={fireRisk === 'BAIXO' ? 'secondary' : fireRisk === 'MÉDIO' ? 'default' : 'destructive'}>
-                    Risco {fireRisk}
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
       {/* Fire Resistance Section */}
       <Collapsible open={openSections.fireResistance} onOpenChange={() => toggleSection('fireResistance')}>
         <Card className="border-orange-500/20">
