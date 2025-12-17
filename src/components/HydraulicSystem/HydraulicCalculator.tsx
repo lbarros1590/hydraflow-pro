@@ -136,59 +136,88 @@ export function HydraulicCalculator({ initialConfig, projectId, onSaveToProject,
   // Load saved calculation
   useEffect(() => {
     if (loadedCalculation?.network_data) {
-      const data = loadedCalculation.network_data;
-      if (data.config) {
-        setOccupancyCode(data.config.occupancyCode || 'A-2');
-        setFireLoadMJm2(data.config.fireLoadMJm2 || 300);
-        setTotalAreaM2(data.config.totalAreaM2 || 1500);
-        setBuildingHeight(data.config.buildingHeight || 15);
-        setPumpEfficiency(data.config.pumpEfficiency || 0.65);
-      }
-      if (data.nodes) {
-        const loadedNodes: Node[] = data.nodes.map((n: any) => ({
-          id: n.id,
-          type: n.type as Node['type'],
-          name: n.name,
-          elevation: n.elevation
-        }));
-        setNodes(loadedNodes);
-      }
-      if (data.pipes) {
-        const loadedPipes: Pipe[] = data.pipes.map((p: any) => {
-          const diamMm = p.diameterMm;
-          const mat = (p.material || 'PVC') as 'PVC' | 'Metal';
-          const accessories = (p.accessories || []).map((a: any) => {
-            const leqUnit = getEquivalentLength(a.type as any, diamMm, mat);
+      try {
+        const data = loadedCalculation.network_data;
+        
+        // Validate data structure
+        if (!data || typeof data !== 'object') {
+          console.error('Invalid network_data structure:', data);
+          toast({
+            title: 'Erro ao carregar',
+            description: 'Estrutura de dados inválida.',
+            variant: 'destructive'
+          });
+          return;
+        }
+
+        if (data.config) {
+          setOccupancyCode(data.config.occupancyCode || 'A-2');
+          setFireLoadMJm2(data.config.fireLoadMJm2 || 300);
+          setTotalAreaM2(data.config.totalAreaM2 || 1500);
+          setBuildingHeight(data.config.buildingHeight || 15);
+          setPumpEfficiency(data.config.pumpEfficiency || 0.65);
+        }
+        
+        if (data.nodes && Array.isArray(data.nodes) && data.nodes.length > 0) {
+          const loadedNodes: Node[] = data.nodes.map((n: any) => ({
+            id: n.id || `N${Math.random().toString(36).substr(2, 9)}`,
+            type: (n.type as Node['type']) || 'junction',
+            name: n.name || 'Nó',
+            elevation: typeof n.elevation === 'number' ? n.elevation : 0
+          }));
+          setNodes(loadedNodes);
+        } else {
+          console.warn('No valid nodes found in saved calculation');
+        }
+        
+        if (data.pipes && Array.isArray(data.pipes) && data.pipes.length > 0) {
+          const loadedPipes: Pipe[] = data.pipes.map((p: any) => {
+            const diamMm = p.diameterMm || 50;
+            const mat = (p.material || 'PVC') as 'PVC' | 'Metal';
+            const accessories = (p.accessories || []).map((a: any) => {
+              const leqUnit = getEquivalentLength(a.type as any, diamMm, mat);
+              return {
+                type: a.type as any,
+                quantity: a.quantity || 1,
+                equivalentLengthUnit: leqUnit,
+                equivalentLengthTotal: leqUnit * (a.quantity || 1)
+              };
+            });
+            const totalLeq = accessories.reduce((sum: number, a: any) => sum + a.equivalentLengthTotal, 0);
             return {
-              type: a.type as any,
-              quantity: a.quantity,
-              equivalentLengthUnit: leqUnit,
-              equivalentLengthTotal: leqUnit * a.quantity
+              id: p.id || `P${Math.random().toString(36).substr(2, 9)}`,
+              name: p.name || 'Trecho',
+              startNodeId: p.startNodeId || '',
+              endNodeId: p.endNodeId || '',
+              length: typeof p.length === 'number' ? p.length : 10,
+              diameter: mm_to_m(diamMm),
+              roughness: getHazenWilliamsC(mat),
+              material: mat,
+              accessories,
+              equivalentLength: totalLeq
             };
           });
-          const totalLeq = accessories.reduce((sum: number, a: any) => sum + a.equivalentLengthTotal, 0);
-          return {
-            id: p.id,
-            name: p.name,
-            startNodeId: p.startNodeId,
-            endNodeId: p.endNodeId,
-            length: p.length,
-            diameter: mm_to_m(diamMm),
-            roughness: getHazenWilliamsC(p.material || 'PVC'),
-            material: p.material || 'PVC',
-            accessories,
-            equivalentLength: totalLeq
-          };
+          setPipes(loadedPipes);
+        } else {
+          console.warn('No valid pipes found in saved calculation');
+        }
+        
+        if (loadedCalculation.results) {
+          setResult(loadedCalculation.results);
+        }
+        
+        toast({
+          title: 'Cálculo carregado',
+          description: 'Dados restaurados do cálculo salvo.',
         });
-        setPipes(loadedPipes);
+      } catch (error) {
+        console.error('Error loading saved calculation:', error);
+        toast({
+          title: 'Erro ao carregar cálculo',
+          description: 'Ocorreu um erro ao restaurar os dados salvos. Tente novamente.',
+          variant: 'destructive'
+        });
       }
-      if (loadedCalculation.results) {
-        setResult(loadedCalculation.results);
-      }
-      toast({
-        title: 'Cálculo carregado',
-        description: 'Dados restaurados do cálculo salvo.',
-      });
     }
   }, [loadedCalculation]);
 
