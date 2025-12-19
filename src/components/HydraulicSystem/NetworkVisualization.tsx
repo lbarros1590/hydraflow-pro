@@ -99,13 +99,27 @@ export function NetworkVisualization({ nodes, pipes, result }: NetworkVisualizat
 
   const getFlowForPipe = (pipeId: string): number | null => {
     if (!result) return null;
-    const flowResult = result.hydraulics.flows.get(pipeId);
+    const flows = result.hydraulics.flows;
+    // Handle both Map and plain object (from JSON deserialization)
+    let flowResult;
+    if (flows instanceof Map) {
+      flowResult = flows.get(pipeId);
+    } else if (flows && typeof flows === 'object') {
+      flowResult = (flows as Record<string, any>)[pipeId];
+    }
     return flowResult ? m3s_to_Lmin(Math.abs(flowResult.flow)) : null;
   };
 
   const getPressureForNode = (nodeId: string): number | null => {
     if (!result) return null;
-    const pressure = result.hydraulics.pressures.get(nodeId);
+    const pressures = result.hydraulics.pressures;
+    // Handle both Map and plain object (from JSON deserialization)
+    let pressure;
+    if (pressures instanceof Map) {
+      pressure = pressures.get(nodeId);
+    } else if (pressures && typeof pressures === 'object') {
+      pressure = (pressures as Record<string, any>)[nodeId];
+    }
     return pressure?.dynamicPressure ?? null;
   };
 

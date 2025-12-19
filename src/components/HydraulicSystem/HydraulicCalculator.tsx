@@ -203,7 +203,21 @@ export function HydraulicCalculator({ initialConfig, projectId, onSaveToProject,
         }
         
         if (loadedCalculation.results) {
-          setResult(loadedCalculation.results);
+          // Hydrate results - convert plain objects back to Maps
+          const results = loadedCalculation.results as any;
+          if (results.hydraulics) {
+            // Convert flows object to Map if it's not already a Map
+            if (results.hydraulics.flows && !(results.hydraulics.flows instanceof Map)) {
+              const flowsObj = results.hydraulics.flows;
+              results.hydraulics.flows = new Map(Object.entries(flowsObj));
+            }
+            // Convert pressures object to Map if it's not already a Map
+            if (results.hydraulics.pressures && !(results.hydraulics.pressures instanceof Map)) {
+              const pressuresObj = results.hydraulics.pressures;
+              results.hydraulics.pressures = new Map(Object.entries(pressuresObj));
+            }
+          }
+          setResult(results);
         }
         
         toast({
@@ -525,9 +539,26 @@ export function HydraulicCalculator({ initialConfig, projectId, onSaveToProject,
         }))
       };
 
+      // Serialize result - convert Maps to plain objects for JSON storage
+      let serializedResult: any = result;
+      if (result?.hydraulics) {
+        serializedResult = {
+          ...result,
+          hydraulics: {
+            ...result.hydraulics,
+            flows: result.hydraulics.flows instanceof Map 
+              ? Object.fromEntries(result.hydraulics.flows)
+              : result.hydraulics.flows,
+            pressures: result.hydraulics.pressures instanceof Map
+              ? Object.fromEntries(result.hydraulics.pressures)
+              : result.hydraulics.pressures
+          }
+        };
+      }
+
       await onSaveToProject({
         network_data: networkData,
-        results: result,
+        results: serializedResult,
         accessories: pipes.flatMap(p => p.accessories || []),
         connections: pipes.map(p => ({ from: p.startNodeId, to: p.endNodeId })),
       });
