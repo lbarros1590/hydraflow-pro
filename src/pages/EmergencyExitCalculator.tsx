@@ -577,7 +577,8 @@ export default function EmergencyExitCalculator() {
     sector: EmergencySector;
   }) => {
     const occupancy = getOccupancyDensity(sector.occupancyCode);
-    const population = sector.area > 0 ? Math.ceil(sector.area / sector.densityM2PerPerson) : 0;
+    // População arredondada para BAIXO conforme NTCB 13/2020
+    const population = sector.area > 0 ? Math.floor(sector.area / sector.densityM2PerPerson) : 0;
     const upRequired = Math.ceil(population / 100);
     const widthRequired = upRequired * 0.55;
     const widthExisting = sector.doors.reduce((sum, d) => sum + d.width * d.quantity, 0);
@@ -586,9 +587,12 @@ export default function EmergencyExitCalculator() {
     return (
       <div className="border rounded-lg p-4 space-y-4 bg-card">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <LayoutGrid className="h-4 w-4 text-primary" />
             <span className="font-medium">{sector.name}</span>
+            <Badge variant="outline" className="text-xs font-mono bg-muted">
+              1 pessoa/{sector.densityM2PerPerson}m²
+            </Badge>
             <Badge variant={isCompliant ? 'default' : 'destructive'} className="text-xs">
               {isCompliant ? 'Atende' : 'Não Atende'}
             </Badge>
