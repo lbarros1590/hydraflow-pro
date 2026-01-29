@@ -78,7 +78,33 @@ export default function ProjectDetail() {
         .single();
 
       if (error) throw error;
-      setProject(data as Project);
+      
+      const projectData = data as Project;
+      
+      // MIGRAÇÃO: Se não tiver mainClassification, extrai do primeiro setor
+      if (!projectData.data.mainClassification?.division && projectData.data.buildings?.length) {
+        for (const building of projectData.data.buildings) {
+          for (const floor of building.floors || []) {
+            for (const sector of floor.sectors || []) {
+              if (sector.occupancyCode) {
+                projectData.data.mainClassification = {
+                  group: sector.occupancyCode.charAt(0).toUpperCase(),
+                  use: sector.occupancyName || '',
+                  division: sector.occupancyCode,
+                  description: sector.occupancyName || '',
+                  cnaeCode: sector.cnaeCode,
+                  fireLoad: sector.fireLoad,
+                };
+                break;
+              }
+            }
+            if (projectData.data.mainClassification?.division) break;
+          }
+          if (projectData.data.mainClassification?.division) break;
+        }
+      }
+      
+      setProject(projectData);
     } catch (error) {
       console.error('Error fetching project:', error);
       toast({

@@ -114,7 +114,32 @@ export default function ProjectWizard() {
 
       if (error) throw error;
       if (data) {
-        form.reset(data.data as ProjectFormData);
+        const formData = data.data as ProjectFormData;
+        
+        // MIGRAÇÃO: Se não tiver mainClassification, extrai do primeiro setor
+        if (!formData.mainClassification?.division && formData.buildings?.length) {
+          for (const building of formData.buildings) {
+            for (const floor of building.floors || []) {
+              for (const sector of floor.sectors || []) {
+                if (sector.occupancyCode) {
+                  formData.mainClassification = {
+                    group: sector.occupancyCode.charAt(0).toUpperCase(),
+                    use: sector.occupancyName || '',
+                    division: sector.occupancyCode,
+                    description: sector.occupancyName || '',
+                    cnaeCode: sector.cnaeCode,
+                    fireLoad: sector.fireLoad,
+                  };
+                  break;
+                }
+              }
+              if (formData.mainClassification?.division) break;
+            }
+            if (formData.mainClassification?.division) break;
+          }
+        }
+        
+        form.reset(formData);
       }
     } catch (error) {
       console.error('Error loading project:', error);
