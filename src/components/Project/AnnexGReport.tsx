@@ -916,15 +916,18 @@ function createExcludedAreasTable(formData: ProjectFormData, type: 'measures' | 
     : 'NÃO SERÃO COMPUTADAS PARA FINS DE DIMENSIONAMENTO DE SISTEMAS HIDRÁULICOS E COMPARTIMENTAÇÃO AS SEGUINTES ÁREAS:';
   
   const tableTitle = type === 'measures'
-    ? 'EXCLUSÃO DE ÁREAS PARA ENQUADRAMENTO DE MEDIDAS DE SEGURANÇA'
-    : 'EXCLUSÃO DE ÁREAS PARA SISTEMAS HIDRÁULICOS';
+    ? 'TABELA 4.1 – EXCLUSÃO DE ÁREAS PARA ENQUADRAMENTO DE MEDIDAS DE SEGURANÇA'
+    : 'TABELA 4.2 – EXCLUSÃO DE ÁREAS PARA SISTEMAS HIDRÁULICOS';
+
+  // Get total area from formData
+  const totalArea = formData.totalArea || 0;
 
   const rows: TableRow[] = [
     new TableRow({ children: [headerCell(tableTitle, { colspan: 3 })] }),
     new TableRow({ children: [
-      headerCell('Denominação'),
-      headerCell('Referência Normativa'),
-      headerCell('Área (m²)')
+      headerCell('DENOMINAÇÃO'),
+      headerCell('REFERÊNCIA NORMATIVA'),
+      headerCell('ÁREA (m²)')
     ] }),
   ];
 
@@ -933,31 +936,46 @@ function createExcludedAreasTable(formData: ProjectFormData, type: 'measures' | 
   excludedAreas.forEach((item: any) => {
     const description = item.description || item.denomination || '';
     const reference = item.reference || '';
-    const area = item.area || 0;
+    const area = typeof item.area === 'number' ? item.area : parseFloat(item.area) || 0;
     
     if (description) {
       totalExcluded += area;
       rows.push(new TableRow({ children: [
         cell(description, { align: AlignmentType.LEFT }),
-        cell(reference),
-        cell(area > 0 ? area.toFixed(2) : '-')
+        cell(reference, { align: AlignmentType.CENTER }),
+        cell(area > 0 ? area.toFixed(2) : '-', { align: AlignmentType.CENTER })
       ]}));
     }
   });
-
-  // Add total row if any areas
-  if (totalExcluded > 0) {
-    rows.push(new TableRow({ children: [
-      cell('Área total excluída', { align: AlignmentType.LEFT, bold: true }),
-      cell(''),
-      cell(totalExcluded.toFixed(2), { bold: true })
-    ]}));
-  }
 
   // If no items to show, return empty
   if (rows.length <= 2) {
     return [];
   }
+
+  // Add summary rows: Total Area, Excluded Area, Net Area
+  rows.push(new TableRow({ children: [
+    cell('ÁREA TOTAL CONSTRUÍDA', { align: AlignmentType.LEFT, bold: true }),
+    cell(''),
+    cell(totalArea.toFixed(2), { bold: true })
+  ]}));
+
+  rows.push(new TableRow({ children: [
+    cell('SOMA DAS ÁREAS EXCLUÍDAS', { align: AlignmentType.LEFT, bold: true }),
+    cell(''),
+    cell(`(-) ${totalExcluded.toFixed(2)}`, { bold: true })
+  ]}));
+
+  const netArea = totalArea - totalExcluded;
+  const netAreaLabel = type === 'measures' 
+    ? 'ÁREA COMPUTADA PARA MEDIDAS DE SEGURANÇA'
+    : 'ÁREA COMPUTADA PARA SISTEMAS HIDRÁULICOS';
+
+  rows.push(new TableRow({ children: [
+    cell(netAreaLabel, { align: AlignmentType.LEFT, bold: true }),
+    cell(''),
+    cell(netArea.toFixed(2), { bold: true })
+  ]}));
 
   return [
     new Paragraph({
