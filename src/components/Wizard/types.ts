@@ -227,8 +227,19 @@ export const projectFormSchema = z.object({
     })).default([]),
   }).optional(),
   
-  // Classificação NTCB Global
+  // Classificação NTCB Global (TABELA 3 - Classificação Principal do Projeto)
   existencePeriod: z.string().optional(),
+  
+  // NOVO: Classificação PRINCIPAL do projeto (TABELA 3 do Anexo A.3 NTCB 01 – Parte 3)
+  // Esta é a classificação que determina todo o projeto
+  mainClassification: z.object({
+    group: z.string().optional(),        // Ex: C
+    use: z.string().optional(),           // Ex: Comercial
+    division: z.string().optional(),      // Ex: C-2
+    description: z.string().optional(),   // Ex: Comércio varejista de combustíveis
+    cnaeCode: z.string().optional(),      // Código CNAE
+    fireLoad: z.number().optional(),      // Carga de incêndio (MJ/m²)
+  }).default({}),
 });
 
 export type ProjectFormData = z.infer<typeof projectFormSchema>;

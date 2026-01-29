@@ -95,18 +95,28 @@ export function ClassificationStep({ form }: ClassificationStepProps) {
     return () => clearTimeout(timer);
   }, [searchTerm, searchActivities]);
 
-  // Handle activity selection
+  // Handle activity selection - Atualiza CLASSIFICAÇÃO PRINCIPAL do projeto
   const handleSelectActivity = (activity: RegulationActivity) => {
     setSelectedActivity(activity);
     setCustomFireLoad(activity.fire_load_value);
     setSearchTerm('');
     setActivities([]);
 
-    // Update form with selected activity data
-    // This could update a global form field or the first sector
+    // NOVO: Atualizar a classificação PRINCIPAL do projeto (TABELA 3)
+    // Esta classificação determina todo o enquadramento do projeto
+    const group = activity.occupancy_division.charAt(0).toUpperCase();
+    form.setValue('mainClassification', {
+      group: group,
+      use: activity.occupancy_group,
+      division: activity.occupancy_division,
+      description: activity.description,
+      cnaeCode: activity.code,
+      fireLoad: activity.fire_load_value,
+    });
+
+    // Também atualiza o primeiro setor (para compatibilidade)
     const buildings = form.getValues('buildings') || [];
     if (buildings.length > 0 && buildings[0].floors?.length > 0 && buildings[0].floors[0].sectors?.length > 0) {
-      const firstSector = buildings[0].floors[0].sectors[0];
       form.setValue(`buildings.0.floors.0.sectors.0.occupancyCode`, activity.occupancy_division);
       form.setValue(`buildings.0.floors.0.sectors.0.occupancyName`, activity.description);
       form.setValue(`buildings.0.floors.0.sectors.0.cnaeCode`, activity.code);
@@ -123,9 +133,56 @@ export function ClassificationStep({ form }: ClassificationStepProps) {
 
   const currentFireLoad = useDeterministicMethod ? customFireLoad : (selectedActivity?.fire_load_value || 0);
   const riskClass = getRiskClass(currentFireLoad);
+  
+  // Observa a classificação principal atual do formulário
+  const mainClassification = form.watch('mainClassification');
+  const hasMainClass = mainClassification?.division && mainClassification?.description;
 
   return (
     <div className="space-y-6">
+      {/* Card da Classificação Principal (TABELA 3) - Só mostra se já estiver definida */}
+      {hasMainClass && (
+        <Card className="border-2 border-primary bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Building2 className="h-5 w-5 text-primary" />
+              TABELA 3 – Classificação Principal do Projeto
+            </CardTitle>
+            <CardDescription>
+              Esta classificação determina todo o enquadramento do projeto e será usada no cálculo hidráulico
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-4 gap-4 text-sm">
+              <div className="space-y-1">
+                <p className="text-muted-foreground font-medium">Grupo</p>
+                <Badge variant="outline" className="text-base font-bold">
+                  {mainClassification.group}
+                </Badge>
+              </div>
+              <div className="space-y-1">
+                <p className="text-muted-foreground font-medium">Uso</p>
+                <p className="font-semibold">{mainClassification.use}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-muted-foreground font-medium">Divisão</p>
+                <Badge className="text-base">{mainClassification.division}</Badge>
+              </div>
+              <div className="space-y-1 col-span-1">
+                <p className="text-muted-foreground font-medium">Carga de Incêndio</p>
+                <p className="font-semibold flex items-center gap-1">
+                  <Flame className="h-4 w-4 text-orange-500" />
+                  {mainClassification.fireLoad} MJ/m²
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3 italic">
+              {mainClassification.description}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* TAREFA 4: Activity Search Card */}
       <Card className="border-primary/30">
         <CardHeader>
