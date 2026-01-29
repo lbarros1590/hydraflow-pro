@@ -471,7 +471,7 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
             ) : (
               <div className="space-y-3">
                 {excludedAreasForMeasures.map((area, areaIndex) => (
-                  <div key={areaIndex} className="grid grid-cols-[1fr,1fr,auto] gap-3 items-start p-3 bg-orange-500/5 rounded-lg border border-orange-500/20">
+                  <div key={areaIndex} className="grid grid-cols-[1fr,1fr,120px,auto] gap-3 items-start p-3 bg-orange-500/5 rounded-lg border border-orange-500/20">
                     <div className="space-y-2">
                       <Label className="text-xs">Descrição da Área</Label>
                       <Textarea 
@@ -500,6 +500,31 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
                         }}
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Área (m²)</Label>
+                      <Input 
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="h-9" 
+                        placeholder="0.00"
+                        value={area.area || ''}
+                        onChange={(e) => {
+                          const newValue = parseFloat(e.target.value) || 0;
+                          const current = form.getValues('excludedAreasForMeasures') || [];
+                          const otherAreasSum = current.reduce((sum, a, i) => i === areaIndex ? sum : sum + (parseFloat(String(a.area)) || 0), 0);
+                          const maxAllowed = totalArea - otherAreasSum;
+                          
+                          if (newValue > maxAllowed) {
+                            return; // Não permite ultrapassar a área total
+                          }
+                          
+                          const updated = [...current];
+                          updated[areaIndex] = { ...updated[areaIndex], area: newValue };
+                          form.setValue('excludedAreasForMeasures', updated);
+                        }}
+                      />
+                    </div>
                     <Button
                       type="button"
                       variant="ghost"
@@ -511,6 +536,20 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
                     </Button>
                   </div>
                 ))}
+                {/* Summary row */}
+                {(() => {
+                  const sumMeasures = excludedAreasForMeasures.reduce((sum, a) => sum + (parseFloat(String(a.area)) || 0), 0);
+                  const netArea = totalArea - sumMeasures;
+                  return (
+                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border text-sm">
+                      <div className="flex items-center gap-4">
+                        <span>Área Total: <strong>{totalArea.toFixed(2)} m²</strong></span>
+                        <span>Excluídas: <strong className="text-orange-600">(-) {sumMeasures.toFixed(2)} m²</strong></span>
+                      </div>
+                      <span>Área Computada: <strong className={cn(netArea < 0 ? "text-destructive" : "text-emerald-600")}>{netArea.toFixed(2)} m²</strong></span>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -544,7 +583,7 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
             ) : (
               <div className="space-y-3">
                 {excludedAreasForHydraulics.map((area, areaIndex) => (
-                  <div key={areaIndex} className="grid grid-cols-[1fr,1fr,auto] gap-3 items-start p-3 bg-orange-500/5 rounded-lg border border-orange-500/20">
+                  <div key={areaIndex} className="grid grid-cols-[1fr,1fr,120px,auto] gap-3 items-start p-3 bg-orange-500/5 rounded-lg border border-orange-500/20">
                     <div className="space-y-2">
                       <Label className="text-xs">Descrição da Área</Label>
                       <Textarea 
@@ -573,6 +612,31 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
                         }}
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Área (m²)</Label>
+                      <Input 
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="h-9" 
+                        placeholder="0.00"
+                        value={area.area || ''}
+                        onChange={(e) => {
+                          const newValue = parseFloat(e.target.value) || 0;
+                          const current = form.getValues('excludedAreasForHydraulics') || [];
+                          const otherAreasSum = current.reduce((sum, a, i) => i === areaIndex ? sum : sum + (parseFloat(String(a.area)) || 0), 0);
+                          const maxAllowed = totalArea - otherAreasSum;
+                          
+                          if (newValue > maxAllowed) {
+                            return; // Não permite ultrapassar a área total
+                          }
+                          
+                          const updated = [...current];
+                          updated[areaIndex] = { ...updated[areaIndex], area: newValue };
+                          form.setValue('excludedAreasForHydraulics', updated);
+                        }}
+                      />
+                    </div>
                     <Button
                       type="button"
                       variant="ghost"
@@ -584,6 +648,20 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
                     </Button>
                   </div>
                 ))}
+                {/* Summary row */}
+                {(() => {
+                  const sumHydraulics = excludedAreasForHydraulics.reduce((sum, a) => sum + (parseFloat(String(a.area)) || 0), 0);
+                  const netArea = totalArea - sumHydraulics;
+                  return (
+                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border text-sm">
+                      <div className="flex items-center gap-4">
+                        <span>Área Total: <strong>{totalArea.toFixed(2)} m²</strong></span>
+                        <span>Excluídas: <strong className="text-orange-600">(-) {sumHydraulics.toFixed(2)} m²</strong></span>
+                      </div>
+                      <span>Área Computada: <strong className={cn(netArea < 0 ? "text-destructive" : "text-emerald-600")}>{netArea.toFixed(2)} m²</strong></span>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
