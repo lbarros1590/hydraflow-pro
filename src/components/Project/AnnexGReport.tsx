@@ -275,43 +275,50 @@ function createExistencePeriodTable(formData: ProjectFormData): (Paragraph | Tab
   ];
 }
 
-// Table 8 - Classification
+// TABELA 3 - Classificação PRINCIPAL do Projeto (Anexo A.3 NTCB 01 – Parte 3)
+// Esta tabela mostra a classificação que determina todo o enquadramento do projeto
 function createClassificationTable(formData: ProjectFormData): (Paragraph | Table)[] {
-  // Get unique occupancies from all sectors
-  const occupancies = new Map<string, { division: string; description: string }>();
-  formData.buildings?.forEach(building => {
-    building.floors?.forEach(floor => {
-      floor.sectors?.forEach(sector => {
-        if (sector.occupancyCode && !occupancies.has(sector.occupancyCode)) {
-          occupancies.set(sector.occupancyCode, {
-            division: sector.occupancyCode,
-            description: sector.occupancyName || ''
-          });
-        }
+  // Usa a classificação PRINCIPAL do projeto (campo mainClassification)
+  const mainClass = formData.mainClassification;
+  
+  // Fallback: se não tiver mainClassification, pega do primeiro setor
+  let group = mainClass?.group || '';
+  let use = mainClass?.use || '';
+  let division = mainClass?.division || '';
+  let description = mainClass?.description || '';
+  
+  // Se não houver classificação principal definida, busca do primeiro setor
+  if (!division) {
+    formData.buildings?.forEach(building => {
+      building.floors?.forEach(floor => {
+        floor.sectors?.forEach(sector => {
+          if (sector.occupancyCode && !division) {
+            division = sector.occupancyCode;
+            description = sector.occupancyName || '';
+            group = division.charAt(0).toUpperCase();
+            const groupData = OCCUPANCY_GROUPS.find(g => g.group === group);
+            use = groupData?.use || '';
+          }
+        });
       });
     });
-  });
+  }
 
   const rows: TableRow[] = [
-    new TableRow({ children: [headerCell('Grupo'), headerCell('Uso'), headerCell('Divisão'), headerCell('Descrição')] })
-  ];
-
-  occupancies.forEach((occ, code) => {
-    const group = code.charAt(0).toUpperCase();
-    const groupData = OCCUPANCY_GROUPS.find(g => g.group === group);
-    rows.push(new TableRow({
+    new TableRow({ children: [headerCell('Grupo'), headerCell('Uso'), headerCell('Divisão'), headerCell('Descrição')] }),
+    new TableRow({
       children: [
         cell(group),
-        cell(groupData?.use || ''),
-        cell(code),
-        cell(occ.description, { align: AlignmentType.LEFT })
+        cell(use),
+        cell(division),
+        cell(description, { align: AlignmentType.LEFT })
       ]
-    }));
-  });
+    })
+  ];
 
   return [
     new Paragraph({
-      children: [new TextRun({ text: 'TABELA 8 da NTCB 01 (Classificação)', bold: true, size: 20 })],
+      children: [new TextRun({ text: 'TABELA 3 do Anexo A.3 NTCB 01 – Parte 3 (Classificação)', bold: true, size: 20 })],
       alignment: AlignmentType.CENTER,
       spacing: { before: 300, after: 100 }
     }),
@@ -373,12 +380,13 @@ function createFireLoadTable(formData: ProjectFormData): (Paragraph | Table)[] {
   ];
 }
 
-// Section 5.1.2 - Building Characteristics
+// Section 5.1.2 - Building Characteristics (AGORA POR EDIFICAÇÃO)
+// As edificações cadastradas preenchem a tabela 5.1.2
 function createBuildingCharacteristicsTable(formData: ProjectFormData): (Paragraph | Table)[] {
   const rows: TableRow[] = [
     new TableRow({
       children: [
-        headerCell('Discriminação do pavimento/setor'),
+        headerCell('Discriminação da edificação'),
         headerCell('Ocupação'),
         headerCell('Risco'),
         headerCell('Nº de pisos'),
@@ -390,28 +398,47 @@ function createBuildingCharacteristicsTable(formData: ProjectFormData): (Paragra
     })
   ];
 
+  // Itera por EDIFICAÇÃO (não por setor)
   formData.buildings?.forEach(building => {
-    building.floors?.forEach(floor => {
-      floor.sectors?.forEach(sector => {
-        const fireLoad = sector.fireLoad || 300;
-        const area = sector.area || 0;
-        const totalLoad = area * fireLoad;
-        const risk = getFireRiskLevel(fireLoad);
+    // Calcula totais da edificação
+    let totalArea = 0;
+    let totalFloors = building.floors?.length || 1;
+    let maxFireLoad = 0;
+    let mainOccupancy = '';
+    let avgHeight = 0;
+    let heightCount = 0;
 
-        rows.push(new TableRow({
-          children: [
-            cell(sector.name || 'Setor', { align: AlignmentType.LEFT }),
-            cell(sector.occupancyName || sector.occupancyCode || '-'),
-            cell(risk),
-            cell('1'),
-            cell(floor.height?.toFixed(2) || '3.00'),
-            cell(area.toFixed(0)),
-            cell(fireLoad.toFixed(0)),
-            cell(totalLoad.toFixed(2))
-          ]
-        }));
+    building.floors?.forEach(floor => {
+      if (floor.height) {
+        avgHeight += floor.height;
+        heightCount++;
+      }
+      floor.sectors?.forEach(sector => {
+        totalArea += sector.area || 0;
+        if (sector.fireLoad && sector.fireLoad > maxFireLoad) {
+          maxFireLoad = sector.fireLoad;
+          mainOccupancy = sector.occupancyName || sector.occupancyCode || '';
+        }
       });
     });
+
+    const fireLoad = maxFireLoad || 300;
+    const totalLoad = totalArea * fireLoad;
+    const risk = getFireRiskLevel(fireLoad);
+    const height = heightCount > 0 ? (avgHeight / heightCount) : 3;
+
+    rows.push(new TableRow({
+      children: [
+        cell(building.name || 'Edificação', { align: AlignmentType.LEFT }),
+        cell(mainOccupancy || '-'),
+        cell(risk),
+        cell(String(totalFloors)),
+        cell(height.toFixed(2)),
+        cell(totalArea.toFixed(0)),
+        cell(fireLoad.toFixed(0)),
+        cell(totalLoad.toFixed(2))
+      ]
+    }));
   });
 
   return [
@@ -669,7 +696,8 @@ function createStairsSection(formData: ProjectFormData): (Paragraph | Table)[] {
   return elements;
 }
 
-// Section 6.3 - Emergency Exits (NTCB 13/2020) - Formato correto conforme Anexo G.4
+// Section 6.3 - Emergency Exits (NTCB 13/2020) - Formato conforme Anexo G.4 e imagem exemplo
+// Os SETORES preenchem esta tabela de saída de emergência
 function createEmergencyExitsTable(formData: ProjectFormData, emergencyCalc?: any): (Paragraph | Table)[] {
   const elements: (Paragraph | Table)[] = [
     new Paragraph({
@@ -684,9 +712,13 @@ function createEmergencyExitsTable(formData: ProjectFormData, emergencyCalc?: an
 
   // Tabela resumo geral conforme modelo
   const building = formData.buildings?.[0];
-  const hClass = getHeightClass(building?.totalHeight || 0);
+  const hClass = getHeightClass(building?.totalHeight || formData.totalHeight || 0);
   const stairs = building?.stairs || [];
   const stairTypes = stairs.map(s => s.type).join(', ') || 'NE';
+  
+  // Pega divisão da classificação principal
+  const mainDivision = formData.mainClassification?.division || 
+    building?.floors?.[0]?.sectors?.[0]?.occupancyCode || '-';
 
   elements.push(new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
@@ -712,8 +744,8 @@ function createEmergencyExitsTable(formData: ProjectFormData, emergencyCalc?: an
         cell('Qtde Saídas Existentes')
       ]}),
       new TableRow({ children: [
-        cell(building?.name || 'Edificação'),
-        cell(building?.floors?.[0]?.sectors?.[0]?.occupancyCode || '-'),
+        cell(building?.name || formData.projectName || 'Edificação'),
+        cell(mainDivision),
         cell(hClass.heightRange),
         cell(stairTypes),
         cell(String(stairs.length || 1))
@@ -721,43 +753,74 @@ function createEmergencyExitsTable(formData: ProjectFormData, emergencyCalc?: an
     ]
   }));
 
-  // Para cada setor/pavimento - tabela detalhada
+  // Para cada SETOR - tabela detalhada conforme imagem exemplo
+  // Formato: Nome do Setor (como título)
+  //          Pavimento XX – Divisão YY – Z Pessoa/Wm²
   formData.buildings?.forEach(building => {
     building.floors?.forEach(floor => {
       floor.sectors?.forEach(sector => {
         const density = sector.densityM2PerPerson || 10;
         const area = sector.area || 0;
+        // População arredondada para BAIXO conforme NTCB 13/2020
         const population = Math.floor(area / density);
         const upRequired = Math.ceil(population / 100);
         const widthRequired = upRequired * 0.55;
         const widthExisting = (sector.doors || []).reduce((sum, d) => sum + (d.width * d.quantity), 0);
         
-        // Calcular portas existentes
-        const doorsExisting = (sector.doors || []).map(d => 
-          `${d.quantity} porta(s) de ${d.width.toFixed(2)}m`
-        ).join(', ') || '-';
+        // Formatar portas existentes conforme exemplo: "1 - 1,80 x 2,00\n1 - 1,00 x 2,10"
+        const doorsExistingFormatted = (sector.doors || []).map(d => 
+          `${d.quantity} - ${d.width.toFixed(2)} x ${d.height.toFixed(2)}`
+        ).join('\n') || '-';
 
+        // Nome do setor como título
         elements.push(new Paragraph({
-          children: [new TextRun({ text: `${floor.name} – ${sector.name} – ${sector.occupancyCode || 'Divisão'} – 1 Pessoa/${density} m²`, bold: true, size: 18 })],
-          spacing: { before: 200, after: 50 }
+          children: [new TextRun({ text: sector.name || 'Setor', bold: true, size: 20, underline: {} })],
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 300, after: 50 }
         }));
 
+        // Subtítulo: Pavimento – Divisão – Densidade (conforme imagem)
+        elements.push(new Paragraph({
+          children: [new TextRun({ 
+            text: `${floor.name}–${sector.occupancyName || 'Comercial'} Divisão ${sector.occupancyCode || '-'}- 1 Pessoa/${density}m²`, 
+            bold: true, 
+            size: 18 
+          })],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 100 }
+        }));
+
+        // Tabela com colunas conforme imagem
         elements.push(new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           rows: [
             new TableRow({ children: [
               headerCell('Área computada (m²)'),
               headerCell('População'),
-              headerCell('Capacidade UP - C'),
+              headerCell('Capacidade da unidade de passagem – C'),
+              headerCell('Metragem das saídas', { colspan: 2 })
+            ]}),
+            new TableRow({ children: [
+              cell(''),
+              cell(''),
+              cell(''),
               headerCell('Exigido'),
               headerCell('Existente')
             ]}),
             new TableRow({ children: [
               cell(area.toFixed(2)),
               cell(String(population)),
-              cell('100 pessoas'),
-              cell(`${upRequired} UP (${widthRequired.toFixed(2)}m)`),
-              cell(`${doorsExisting} (${widthExisting.toFixed(2)}m)`)
+              cell('100'),
+              cell(widthRequired.toFixed(2)),
+              // Portas existentes em formato multilinha
+              new TableCell({
+                children: [new Paragraph({
+                  children: [new TextRun({ text: doorsExistingFormatted, size: 18 })],
+                  alignment: AlignmentType.CENTER
+                })],
+                borders,
+                verticalAlign: 'center',
+              })
             ]})
           ]
         }));

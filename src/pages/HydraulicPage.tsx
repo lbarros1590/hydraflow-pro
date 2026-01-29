@@ -50,20 +50,60 @@ interface HydraulicCalculation {
   created_at: string;
 }
 
+// Extrai configuração hidráulica usando a CLASSIFICAÇÃO PRINCIPAL do projeto
 function extractHydraulicConfig(project: Project) {
   const data = project.data;
-  const mainSector = data.sectors?.reduce((main, sector) => 
-    sector.area > (main?.area || 0) ? sector : main
-  , data.sectors?.[0]);
+  
+  // PRIORIDADE 1: Usa a classificação PRINCIPAL do projeto (TABELA 3)
+  const mainClass = data.mainClassification;
+  if (mainClass?.division && mainClass?.fireLoad) {
+    return {
+      occupancyCode: mainClass.division,
+      fireLoadMJm2: mainClass.fireLoad,
+      totalAreaM2: data.totalArea || 0,
+      buildingHeight: data.totalHeight || 0,
+    };
+  }
 
-  const totalArea = data.sectors?.reduce((sum, s) => sum + s.area, 0) || 0;
-  const avgFireLoad = data.sectors?.reduce((sum, s) => 
-    sum + (s.fireLoad || 0) * s.area, 0
-  ) / (totalArea || 1);
+  // PRIORIDADE 2 (Fallback): Busca nos setores com maior área
+  let maxFireLoad = 300;
+  let mainOccupancy = 'A-2';
+  let totalArea = 0;
+
+  data.buildings?.forEach(building => {
+    building.floors?.forEach(floor => {
+      floor.sectors?.forEach(sector => {
+        totalArea += sector.area || 0;
+        if (sector.fireLoad && sector.fireLoad > maxFireLoad) {
+          maxFireLoad = sector.fireLoad;
+          mainOccupancy = sector.occupancyCode || 'A-2';
+        }
+      });
+    });
+  });
+
+  // Fallback legado para projetos antigos com setores no nível raiz
+  if (data.sectors && data.sectors.length > 0) {
+    const legacyTotalArea = data.sectors.reduce((sum, s) => sum + s.area, 0);
+    const avgFireLoad = data.sectors.reduce((sum, s) => 
+      sum + (s.fireLoad || 0) * s.area, 0
+    ) / (legacyTotalArea || 1);
+    
+    const mainSector = data.sectors.reduce((main, sector) => 
+      sector.area > (main?.area || 0) ? sector : main
+    , data.sectors[0]);
+
+    return {
+      occupancyCode: mainSector?.occupancyCode || mainOccupancy,
+      fireLoadMJm2: Math.round(avgFireLoad) || maxFireLoad,
+      totalAreaM2: data.totalArea || legacyTotalArea || totalArea,
+      buildingHeight: data.totalHeight || 0,
+    };
+  }
 
   return {
-    occupancyCode: mainSector?.occupancyCode || 'A-2',
-    fireLoadMJm2: Math.round(avgFireLoad) || 300,
+    occupancyCode: mainOccupancy,
+    fireLoadMJm2: maxFireLoad,
     totalAreaM2: data.totalArea || totalArea,
     buildingHeight: data.totalHeight || 0,
   };
