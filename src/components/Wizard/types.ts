@@ -243,14 +243,16 @@ export const projectFormSchema = z.object({
   
   // TABELA 4.1 - Áreas excluídas para enquadramento de medidas de segurança
   excludedAreasForMeasures: z.array(z.object({
-    denomination: z.string(),
-    area: z.number(),
+    description: z.string().optional(),
+    reference: z.string().optional(),
+    area: z.number().optional(),
   })).default([]),
   
   // TABELA 4.2 - Áreas excluídas para sistemas hidráulicos
   excludedAreasForHydraulics: z.array(z.object({
-    denomination: z.string(),
-    area: z.number(),
+    description: z.string().optional(),
+    reference: z.string().optional(),
+    area: z.number().optional(),
   })).default([]),
   
   // Rampas (NTCB 13/2020 - Seção 6.3.2)

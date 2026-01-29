@@ -37,11 +37,13 @@ import {
   FileText,
   Truck,
   Trash2,
-  Calendar
+  Calendar,
+  Scissors
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { EXISTENCE_PERIODS } from '@/components/Project/AnnexGReportData';
 import { getMandatoryMeasures, type RequirementWarning } from '@/engine/requirementsMatrix';
+import { Textarea } from '@/components/ui/textarea';
 
 interface MeasuresStepProps {
   form: UseFormReturn<ProjectFormData>;
@@ -60,6 +62,22 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
   const exemptMeasures = form.watch('exemptMeasures') || [];
   const voluntaryMeasures = form.watch('voluntaryMeasures') || [];
   const vehicleAccess = form.watch('vehicleAccess') || { roads: [], gates: [] };
+  const excludedAreasForMeasures = form.watch('excludedAreasForMeasures') || [];
+  const excludedAreasForHydraulics = form.watch('excludedAreasForHydraulics') || [];
+
+  // Excluded Areas handlers
+  const handleAddExcludedArea = (type: 'measures' | 'hydraulics') => {
+    const fieldName = type === 'measures' ? 'excludedAreasForMeasures' : 'excludedAreasForHydraulics';
+    const current = form.getValues(fieldName) || [];
+    const newArea = { description: '', reference: '', area: 0 };
+    form.setValue(fieldName, [...current, newArea]);
+  };
+
+  const handleRemoveExcludedArea = (type: 'measures' | 'hydraulics', index: number) => {
+    const fieldName = type === 'measures' ? 'excludedAreasForMeasures' : 'excludedAreasForHydraulics';
+    const current = form.getValues(fieldName) || [];
+    form.setValue(fieldName, current.filter((_, i) => i !== index));
+  };
 
   // TAREFA 5: Calculate mandatory measures using the new requirementsMatrix engine
   const analysis = useMemo(() => {
@@ -373,6 +391,164 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
                 </button>
               );
             })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Excluded Areas Card - TABELA 4.1 e 4.2 */}
+      <Card className="border-orange-500/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Scissors className="h-5 w-5 text-orange-600" />
+            Áreas Excluídas (Tabelas 4.1 e 4.2 - NTCB 01)
+          </CardTitle>
+          <CardDescription>
+            Áreas que não serão consideradas para cálculo de medidas de segurança ou dimensionamento hidráulico
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* TABELA 4.1 - Áreas excluídas para medidas de segurança */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">TABELA 4.1 - Áreas excluídas para Medidas de Segurança</p>
+                <p className="text-xs text-muted-foreground">
+                  Áreas que não serão consideradas para dimensionamento de medidas de segurança (exceto hidrantes)
+                </p>
+              </div>
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm" 
+                onClick={() => handleAddExcludedArea('measures')} 
+                className="gap-1"
+              >
+                <Plus className="h-4 w-4" /> Adicionar Área
+              </Button>
+            </div>
+            
+            {excludedAreasForMeasures.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg">
+                Nenhuma área excluída cadastrada. Clique em "Adicionar Área" se necessário.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {excludedAreasForMeasures.map((area, areaIndex) => (
+                  <div key={areaIndex} className="grid grid-cols-[1fr,1fr,auto] gap-3 items-start p-3 bg-orange-500/5 rounded-lg border border-orange-500/20">
+                    <div className="space-y-2">
+                      <Label className="text-xs">Descrição da Área</Label>
+                      <Textarea 
+                        className="min-h-[60px] text-sm" 
+                        placeholder="Ex: Garagem coberta com ventilação permanente..."
+                        value={area.description || ''}
+                        onChange={(e) => {
+                          const current = form.getValues('excludedAreasForMeasures') || [];
+                          const updated = [...current];
+                          updated[areaIndex] = { ...updated[areaIndex], description: e.target.value };
+                          form.setValue('excludedAreasForMeasures', updated);
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Referência Normativa</Label>
+                      <Input 
+                        className="h-9" 
+                        placeholder="Ex: NTCB 01/2025 Art. 4.1"
+                        value={area.reference || ''}
+                        onChange={(e) => {
+                          const current = form.getValues('excludedAreasForMeasures') || [];
+                          const updated = [...current];
+                          updated[areaIndex] = { ...updated[areaIndex], reference: e.target.value };
+                          form.setValue('excludedAreasForMeasures', updated);
+                        }}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-destructive hover:text-destructive mt-6"
+                      onClick={() => handleRemoveExcludedArea('measures', areaIndex)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="border-t pt-4" />
+
+          {/* TABELA 4.2 - Áreas excluídas para dimensionamento hidráulico */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">TABELA 4.2 - Áreas excluídas para Dimensionamento Hidráulico</p>
+                <p className="text-xs text-muted-foreground">
+                  Áreas que não serão consideradas para dimensionamento do sistema de hidrantes
+                </p>
+              </div>
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm" 
+                onClick={() => handleAddExcludedArea('hydraulics')} 
+                className="gap-1"
+              >
+                <Plus className="h-4 w-4" /> Adicionar Área
+              </Button>
+            </div>
+            
+            {excludedAreasForHydraulics.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg">
+                Nenhuma área excluída cadastrada. Clique em "Adicionar Área" se necessário.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {excludedAreasForHydraulics.map((area, areaIndex) => (
+                  <div key={areaIndex} className="grid grid-cols-[1fr,1fr,auto] gap-3 items-start p-3 bg-orange-500/5 rounded-lg border border-orange-500/20">
+                    <div className="space-y-2">
+                      <Label className="text-xs">Descrição da Área</Label>
+                      <Textarea 
+                        className="min-h-[60px] text-sm" 
+                        placeholder="Ex: Área de estacionamento descoberta..."
+                        value={area.description || ''}
+                        onChange={(e) => {
+                          const current = form.getValues('excludedAreasForHydraulics') || [];
+                          const updated = [...current];
+                          updated[areaIndex] = { ...updated[areaIndex], description: e.target.value };
+                          form.setValue('excludedAreasForHydraulics', updated);
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Referência Normativa</Label>
+                      <Input 
+                        className="h-9" 
+                        placeholder="Ex: NTCB 17/2020 Art. 5.2"
+                        value={area.reference || ''}
+                        onChange={(e) => {
+                          const current = form.getValues('excludedAreasForHydraulics') || [];
+                          const updated = [...current];
+                          updated[areaIndex] = { ...updated[areaIndex], reference: e.target.value };
+                          form.setValue('excludedAreasForHydraulics', updated);
+                        }}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-destructive hover:text-destructive mt-6"
+                      onClick={() => handleRemoveExcludedArea('hydraulics', areaIndex)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
