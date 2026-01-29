@@ -180,7 +180,7 @@ export function AnnexGReport({ formData, projectId }: AnnexGReportProps) {
             // Table 9 - Height
             ...createHeightTable(formData),
 
-            // Table 10 - Fire Load
+            // Table 10 - Fire Load (TABELA 5)
             ...createFireLoadTable(formData),
 
             // Section 5.1.2 - Building Characteristics
@@ -191,11 +191,31 @@ export function AnnexGReport({ formData, projectId }: AnnexGReportProps) {
             new Paragraph({ children: [new PageBreak()] }),
             ...createSafetyMeasuresTable(formData),
 
+            // Section 4.1 - Excluded Areas for Measures (TABELA 4.1)
+            ...createExcludedAreasTable(formData, 'measures'),
+
+            // Section 4.2 - Excluded Areas for Hydraulics (TABELA 4.2)
+            ...createExcludedAreasTable(formData, 'hydraulics'),
+
             // Section 6.1 - Fire Resistance
+            new Paragraph({ children: [new PageBreak()] }),
             ...createFireResistanceSection(formData),
 
+            // Section 6.12 - Finishing Materials Control (NTCB 12/2020)
+            ...createFinishingMaterialsSection(formData),
+
             // Section 6.2 - Vehicle Access
+            new Paragraph({ children: [new PageBreak()] }),
             ...createVehicleAccessSection(formData),
+
+            // Separation Table (NTCB 09) - moved before emergency exits
+            ...(savedCalcs.separation ? [
+              new Paragraph({ children: [new PageBreak()] }),
+              ...createSeparationTableFromCalc(savedCalcs.separation)
+            ] : formData.buildings && formData.buildings.length > 1 ? [
+              new Paragraph({ children: [new PageBreak()] }),
+              ...createSeparationTable(formData)
+            ] : []),
 
             // Table 6.3 - Emergency Exits (NTCB 13/2020)
             new Paragraph({ children: [new PageBreak()] }),
@@ -203,20 +223,14 @@ export function AnnexGReport({ formData, projectId }: AnnexGReportProps) {
 
             // Section 6.3.1 - Stairs
             ...createStairsSection(formData),
+            
+            // Section 6.3.2 - Ramps
+            ...createRampsSection(formData),
 
             // Section 6.7 - Hydrants and Hose Reels
             ...(savedCalcs.hydraulic ? [
               new Paragraph({ children: [new PageBreak()] }),
               ...createHydraulicSystemTable(savedCalcs.hydraulic)
-            ] : []),
-
-            // Separation Table (NTCB 09)
-            ...(savedCalcs.separation ? [
-              new Paragraph({ children: [new PageBreak()] }),
-              ...createSeparationTableFromCalc(savedCalcs.separation)
-            ] : formData.buildings && formData.buildings.length > 1 ? [
-              new Paragraph({ children: [new PageBreak()] }),
-              ...createSeparationTable(formData)
             ] : []),
 
             // Footer
@@ -826,6 +840,183 @@ function createEmergencyExitsTable(formData: ProjectFormData, emergencyCalc?: an
         }));
       });
     });
+  });
+
+  return elements;
+}
+
+// Section 4.1/4.2 - Excluded Areas Tables (NTCB 01/2025)
+function createExcludedAreasTable(formData: ProjectFormData, type: 'measures' | 'hydraulics'): (Paragraph | Table)[] {
+  const excludedAreas = type === 'measures' 
+    ? (formData as any).excludedAreasForMeasures || []
+    : (formData as any).excludedAreasForHydraulics || [];
+  
+  // If no excluded areas, return empty
+  if (excludedAreas.length === 0) {
+    return [];
+  }
+
+  const titleNumber = type === 'measures' ? '4.1' : '4.2';
+  const title = type === 'measures'
+    ? 'NÃO SERÃO COMPUTADAS AS SEGUINTES ÁREAS PARA ENQUADRAMENTO NA TABELA 6 DO ANEXO A.3 DESTA NTCB 01'
+    : 'NÃO SERÃO COMPUTADAS PARA FINS DE DIMENSIONAMENTO DE SISTEMAS HIDRÁULICOS E COMPARTIMENTAÇÃO AS SEGUINTES ÁREAS:';
+  
+  const tableTitle = type === 'measures'
+    ? 'EXCLUSÃO DE ÁREAS PARA ENQUADRAMENTO DE MEDIDAS DE SEGURANÇA'
+    : 'EXCLUSÃO DE ÁREAS PARA SISTEMAS HIDRÁULICOS';
+
+  const defaultItems = type === 'measures' ? [
+    'Telheiros, com laterais abertas, destinados à proteção de utensílios, caixas d\'água, tanques e outras instalações desde que não tenham área superior a 4,00 m² (quatro metros quadrado);',
+    'Platibandas',
+    'Beirais de telhados até um metro de projeção',
+    'Escadas',
+    'Dutos de ventilação de saídas de emergência',
+    'Passagens cobertas, com largura máxima de 3 metros, com laterais abertas, destinadas apenas à circulação de pessoas ou mercadorias',
+    'Coberturas incombustíveis e sombrites destinadas exclusivamente a estacionamento de veículos localizadas no térreo, sem fechamentos laterais',
+    'Painéis solares'
+  ] : [
+    'Coberturas exclusivas de bombas de Combustível',
+    'Reservatórios de água, piscinas, banheiros, vestiários',
+    'Coberturas das praças de pedágio'
+  ];
+
+  const rows: TableRow[] = [
+    new TableRow({ children: [headerCell(tableTitle, { colspan: 2 })] }),
+    new TableRow({ children: [headerCell('Denominação'), headerCell('Área (m²)')] }),
+  ];
+
+  // Add default items with areas from formData
+  let totalExcluded = 0;
+  defaultItems.forEach(item => {
+    const areaItem = excludedAreas.find((e: any) => e.denomination?.includes(item.substring(0, 20)));
+    const area = areaItem?.area || 0;
+    totalExcluded += area;
+    
+    if (area > 0) {
+      rows.push(new TableRow({ children: [
+        cell(item, { align: AlignmentType.LEFT }),
+        cell(area > 0 ? area.toFixed(2) : '')
+      ]}));
+    }
+  });
+
+  // Add total row
+  if (totalExcluded > 0) {
+    rows.push(new TableRow({ children: [
+      cell('Área total excluída', { align: AlignmentType.LEFT, bold: true }),
+      cell(totalExcluded.toFixed(2), { bold: true })
+    ]}));
+  }
+
+  // If no areas to show, return empty
+  if (totalExcluded === 0) {
+    return [];
+  }
+
+  return [
+    new Paragraph({
+      children: [new TextRun({ text: `${titleNumber} ${title}`, bold: true, size: 18 })],
+      spacing: { before: 300, after: 100 }
+    }),
+    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows })
+  ];
+}
+
+// Section 6.12 - Finishing Materials Control (NTCB 12/2020)
+function createFinishingMaterialsSection(formData: ProjectFormData): (Paragraph | Table)[] {
+  const building = formData.buildings?.[0];
+  const materials = building?.finishingMaterials || [];
+  
+  // Se não houver materiais configurados, usar classificação principal
+  const mainDivision = formData.mainClassification?.division || '-';
+  const mainGroup = formData.mainClassification?.group || '-';
+  const mainUse = formData.mainClassification?.use || '-';
+
+  const rows: TableRow[] = [
+    new TableRow({ children: [
+      headerCell('6.12 CONTROLE DE MATERIAIS DE ACABAMENTO\n(NTCB 12/2020)', { colspan: 5 })
+    ]}),
+    new TableRow({ children: [
+      headerCell(''),
+      headerCell('FINALIDADE DO MATERIAL', { colspan: 4 })
+    ]}),
+    new TableRow({ children: [
+      headerCell('Grupo/ Divisão'),
+      headerCell('Piso\n(Acabamento/\nRevestimento)'),
+      headerCell('Paredes e divisórias\n(Acabamento/\nRevestimento)'),
+      headerCell('Teto e forro\n(Acabamento/\nRevestimento)'),
+      headerCell('Fachada\n(Acabamento/\nRevestimento)')
+    ]})
+  ];
+
+  if (materials.length > 0) {
+    materials.forEach(mat => {
+      rows.push(new TableRow({ children: [
+        cell(mat.groupDivision),
+        cell(mat.floor),
+        cell(mat.wallsPartitions),
+        cell(mat.ceilingRoof),
+        cell(mat.facade)
+      ]}));
+    });
+  } else {
+    // Valor padrão baseado na classificação principal
+    rows.push(new TableRow({ children: [
+      cell(`${mainUse}\n${mainDivision}`),
+      cell('Classe II-A'),
+      cell('Classe II-A'),
+      cell('Classe II-A'),
+      cell('Classe I A IIB')
+    ]}));
+  }
+
+  return [
+    new Paragraph({
+      children: [new TextRun({ text: 'Esta medida de segurança foi dimensionada atendendo à NTCB 12 do Corpo de Bombeiros Militar de Mato Grosso.', size: 18, italics: true })],
+      spacing: { before: 300, after: 100 }
+    }),
+    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows })
+  ];
+}
+
+// Section 6.3.2 - Ramps (NTCB 13/2020)
+function createRampsSection(formData: ProjectFormData): (Paragraph | Table)[] {
+  const ramps = (formData as any).ramps || [];
+  
+  // Se não houver rampas, não mostrar seção
+  if (ramps.length === 0) {
+    return [];
+  }
+
+  const elements: (Paragraph | Table)[] = [
+    new Paragraph({
+      children: [new TextRun({ text: '6.3.2 RAMPAS', bold: true, size: 20 })],
+      spacing: { before: 300, after: 100 }
+    })
+  ];
+
+  ramps.forEach((ramp: any) => {
+    elements.push(new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new TableRow({ children: [headerCell('CARACTERÍSTICAS / DIMENSÕES', { colspan: 2 })] }),
+        new TableRow({ children: [cell('TRRF de Parede', { align: AlignmentType.LEFT }), cell(ramp.trrfWall || 'NA')] }),
+        new TableRow({ children: [cell('Largura da rampa', { align: AlignmentType.LEFT }), cell(ramp.width ? `${ramp.width.toFixed(2)} m` : 'NA')] }),
+        new TableRow({ children: [cell('Material da porta', { align: AlignmentType.LEFT }), cell(ramp.doorMaterial || 'NA')] }),
+        new TableRow({ children: [cell('Altura a vencer por lance', { align: AlignmentType.LEFT }), cell(ramp.heightPerRun ? `${ramp.heightPerRun.toFixed(2)} m` : 'NA')] }),
+        new TableRow({ children: [cell('Altura do guarda-corpo', { align: AlignmentType.LEFT }), cell(ramp.guardRailHeight ? `${ramp.guardRailHeight.toFixed(2)} m` : 'NA')] }),
+        new TableRow({ children: [cell('Declividade', { align: AlignmentType.LEFT }), cell(ramp.slope ? `${ramp.slope}%` : 'NA')] }),
+        new TableRow({ children: [cell('Comprimento', { align: AlignmentType.LEFT }), cell(ramp.length ? `${ramp.length.toFixed(2)} m` : 'NA')] }),
+        new TableRow({ children: [headerCell('Corrimão', { colspan: 2 })] }),
+        new TableRow({ children: [cell('Altura', { align: AlignmentType.LEFT }), cell(ramp.handrailHeight ? `${ramp.handrailHeight.toFixed(2)} m` : 'NA')] }),
+        new TableRow({ children: [cell('Diâmetro (circular)', { align: AlignmentType.LEFT }), cell(ramp.handrailDiameter ? `${ramp.handrailDiameter} mm` : 'NA')] }),
+        new TableRow({ children: [headerCell('Patamar', { colspan: 2 })] }),
+        new TableRow({ children: [cell('Quantidade', { align: AlignmentType.LEFT }), cell(ramp.landingQuantity?.toString() || 'NA')] }),
+        new TableRow({ children: [cell('Comprimento', { align: AlignmentType.LEFT }), cell(ramp.landingLength ? `${ramp.landingLength.toFixed(2)} m` : 'NA')] }),
+        new TableRow({ children: [cell('Largura', { align: AlignmentType.LEFT }), cell(ramp.landingWidth ? `${ramp.landingWidth.toFixed(2)} m` : 'NA')] }),
+        new TableRow({ children: [cell('TRRF da estrutura da rampa', { align: AlignmentType.LEFT }), cell(ramp.trrfStructure ? `${ramp.trrfStructure} min` : 'NA')] }),
+      ]
+    }));
   });
 
   return elements;

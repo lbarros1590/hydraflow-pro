@@ -240,6 +240,36 @@ export const projectFormSchema = z.object({
     cnaeCode: z.string().optional(),      // Código CNAE
     fireLoad: z.number().optional(),      // Carga de incêndio (MJ/m²)
   }).default({}),
+  
+  // TABELA 4.1 - Áreas excluídas para enquadramento de medidas de segurança
+  excludedAreasForMeasures: z.array(z.object({
+    denomination: z.string(),
+    area: z.number(),
+  })).default([]),
+  
+  // TABELA 4.2 - Áreas excluídas para sistemas hidráulicos
+  excludedAreasForHydraulics: z.array(z.object({
+    denomination: z.string(),
+    area: z.number(),
+  })).default([]),
+  
+  // Rampas (NTCB 13/2020 - Seção 6.3.2)
+  ramps: z.array(z.object({
+    id: z.string(),
+    width: z.number().optional(),
+    slope: z.number().optional(),
+    length: z.number().optional(),
+    heightPerRun: z.number().optional(),
+    guardRailHeight: z.number().optional(),
+    handrailHeight: z.number().optional(),
+    handrailDiameter: z.number().optional(),
+    landingQuantity: z.number().optional(),
+    landingLength: z.number().optional(),
+    landingWidth: z.number().optional(),
+    trrfWall: z.string().optional(),
+    doorMaterial: z.string().optional(),
+    trrfStructure: z.number().optional(),
+  })).default([]),
 });
 
 export type ProjectFormData = z.infer<typeof projectFormSchema>;

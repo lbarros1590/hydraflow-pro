@@ -304,19 +304,188 @@ export default function ProjectDetail() {
               </CardContent>
             </Card>
 
-            {/* Sectors Card */}
+            {/* TABELA 3 - Classificação Principal (Anexo A.3 NTCB 01 – Parte 3) */}
+            <Card className="bg-card border-border md:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <FileText className="w-5 h-5 text-primary" />
+                  Classificação Principal (TABELA 3 - NTCB 01)
+                </CardTitle>
+                <CardDescription>
+                  Classificação que determina o enquadramento normativo do projeto
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {data.mainClassification?.division ? (
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="grid grid-cols-4 bg-muted/50 border-b">
+                      <div className="p-3 border-r font-medium text-center text-sm">Grupo</div>
+                      <div className="p-3 border-r font-medium text-center text-sm">Uso</div>
+                      <div className="p-3 border-r font-medium text-center text-sm">Divisão</div>
+                      <div className="p-3 font-medium text-center text-sm">Descrição</div>
+                    </div>
+                    <div className="grid grid-cols-4">
+                      <div className="p-3 border-r text-center font-mono font-medium text-lg">
+                        {data.mainClassification.group}
+                      </div>
+                      <div className="p-3 border-r text-center">
+                        {data.mainClassification.use}
+                      </div>
+                      <div className="p-3 border-r text-center font-mono font-medium">
+                        {data.mainClassification.division}
+                      </div>
+                      <div className="p-3 text-left text-sm">
+                        {data.mainClassification.description}
+                      </div>
+                    </div>
+                    {(data.mainClassification.cnaeCode || data.mainClassification.fireLoad) && (
+                      <div className="border-t bg-muted/30 px-3 py-2 flex gap-4 text-sm">
+                        {data.mainClassification.cnaeCode && (
+                          <span><strong>CNAE:</strong> {data.mainClassification.cnaeCode}</span>
+                        )}
+                        {data.mainClassification.fireLoad && (
+                          <span><strong>Carga de Incêndio:</strong> {data.mainClassification.fireLoad} MJ/m²</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-center py-4">
+                    Classificação principal não definida. Edite o projeto para configurar.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Edificações Card (TABELA 5.1.2) */}
             <Card className="bg-card border-border md:col-span-2">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Building2 className="w-5 h-5 text-primary" />
-                  Setores / Ocupações
+                  Edificações (TABELA 5.1.2)
                 </CardTitle>
                 <CardDescription>
-                  {data.sectors?.length || 0} setor(es) cadastrado(s)
+                  {data.buildings?.length || 0} edificação(ões) cadastrada(s)
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {data.sectors && data.sectors.length > 0 ? (
+                {data.buildings && data.buildings.length > 0 ? (
+                  <div className="space-y-4">
+                    {data.buildings.map((building, bIndex) => {
+                      // Calcula totais da edificação
+                      let totalArea = 0;
+                      let maxFireLoad = 0;
+                      let sectorCount = 0;
+                      let mainOccupancy = '';
+                      
+                      building.floors?.forEach(floor => {
+                        floor.sectors?.forEach(sector => {
+                          totalArea += sector.area || 0;
+                          sectorCount++;
+                          if (sector.fireLoad && sector.fireLoad > maxFireLoad) {
+                            maxFireLoad = sector.fireLoad;
+                            mainOccupancy = sector.occupancyName || sector.occupancyCode || '';
+                          }
+                        });
+                      });
+
+                      return (
+                        <div 
+                          key={building.id || bIndex}
+                          className="border rounded-lg p-4 bg-muted/30"
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-semibold text-lg">{building.name || `Edificação ${bIndex + 1}`}</h4>
+                            <Badge variant="outline">
+                              {building.floors?.length || 1} pavimento(s)
+                            </Badge>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <p className="text-muted-foreground">Área Total</p>
+                              <p className="font-mono font-medium">{totalArea.toLocaleString()} m²</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Carga Incêndio</p>
+                              <p className="font-mono font-medium">{maxFireLoad || 'N/A'} MJ/m²</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Ocupação Principal</p>
+                              <p className="font-medium">{mainOccupancy || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Setores</p>
+                              <p className="font-mono font-medium">{sectorCount}</p>
+                            </div>
+                          </div>
+
+                          {/* Pavimentos e Setores */}
+                          {building.floors && building.floors.length > 0 && (
+                            <div className="mt-4 space-y-2">
+                              {building.floors.map((floor, fIndex) => (
+                                <div key={floor.id || fIndex} className="bg-background rounded p-3">
+                                  <p className="font-medium text-sm mb-2">{floor.name || `Pavimento ${fIndex + 1}`}</p>
+                                  <div className="grid gap-2">
+                                    {floor.sectors?.map((sector, sIndex) => (
+                                      <div 
+                                        key={sector.id || sIndex}
+                                        className="flex items-center justify-between p-2 rounded bg-muted/50 text-sm"
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <span className="font-medium">{sector.name}</span>
+                                          {sector.occupancyCode && (
+                                            <Badge variant="secondary" className="text-xs">
+                                              {sector.occupancyCode}
+                                            </Badge>
+                                          )}
+                                          <span className="text-muted-foreground text-xs">
+                                            1 pessoa/{sector.densityM2PerPerson || 10}m²
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-4 text-right">
+                                          <span className="font-mono">{sector.area?.toLocaleString()} m²</span>
+                                          <span className="text-muted-foreground">
+                                            {sector.fireLoad || 'N/A'} MJ/m²
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                    {(!floor.sectors || floor.sectors.length === 0) && (
+                                      <p className="text-muted-foreground text-xs italic">
+                                        Nenhum setor cadastrado neste pavimento
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-center py-8">
+                    Nenhuma edificação cadastrada. Edite o projeto para adicionar edificações.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Legacy Sectors Card (para projetos antigos sem hierarquia) */}
+            {data.sectors && data.sectors.length > 0 && (!data.buildings || data.buildings.length === 0) && (
+              <Card className="bg-card border-border md:col-span-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Building2 className="w-5 h-5 text-primary" />
+                    Setores / Ocupações
+                  </CardTitle>
+                  <CardDescription>
+                    {data.sectors?.length || 0} setor(es) cadastrado(s)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
                   <div className="space-y-3">
                     {data.sectors.map((sector, index) => (
                       <div 
@@ -338,13 +507,9 @@ export default function ProjectDetail() {
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <p className="text-muted-foreground text-center py-8">
-                    Nenhum setor cadastrado
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Measures Card */}
             {data.mandatoryMeasures && data.mandatoryMeasures.length > 0 && (
