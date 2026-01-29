@@ -38,12 +38,14 @@ import {
   Truck,
   Trash2,
   Calendar,
-  Scissors
+  Scissors,
+  ArrowUpDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { EXISTENCE_PERIODS } from '@/components/Project/AnnexGReportData';
 import { getMandatoryMeasures, type RequirementWarning } from '@/engine/requirementsMatrix';
 import { Textarea } from '@/components/ui/textarea';
+import { generateSectorId } from '../types';
 
 interface MeasuresStepProps {
   form: UseFormReturn<ProjectFormData>;
@@ -64,6 +66,7 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
   const vehicleAccess = form.watch('vehicleAccess') || { roads: [], gates: [] };
   const excludedAreasForMeasures = form.watch('excludedAreasForMeasures') || [];
   const excludedAreasForHydraulics = form.watch('excludedAreasForHydraulics') || [];
+  const ramps = form.watch('ramps') || [];
 
   // Excluded Areas handlers
   const handleAddExcludedArea = (type: 'measures' | 'hydraulics') => {
@@ -77,6 +80,40 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
     const fieldName = type === 'measures' ? 'excludedAreasForMeasures' : 'excludedAreasForHydraulics';
     const current = form.getValues(fieldName) || [];
     form.setValue(fieldName, current.filter((_, i) => i !== index));
+  };
+
+  // Ramps handlers
+  const handleAddRamp = () => {
+    const current = form.getValues('ramps') || [];
+    const newRamp = {
+      id: generateSectorId(),
+      width: 1.2,
+      slope: 8.33,
+      length: 0,
+      heightPerRun: 0,
+      guardRailHeight: 1.05,
+      handrailHeight: 0.92,
+      handrailDiameter: 38,
+      landingQuantity: 0,
+      landingLength: 1.2,
+      landingWidth: 1.2,
+      trrfWall: '',
+      doorMaterial: '',
+      trrfStructure: 0,
+    };
+    form.setValue('ramps', [...current, newRamp]);
+  };
+
+  const handleRemoveRamp = (index: number) => {
+    const current = form.getValues('ramps') || [];
+    form.setValue('ramps', current.filter((_, i) => i !== index));
+  };
+
+  const updateRamp = (index: number, field: string, value: number | string) => {
+    const current = form.getValues('ramps') || [];
+    const updated = [...current];
+    updated[index] = { ...updated[index], [field]: value };
+    form.setValue('ramps', updated);
   };
 
   // TAREFA 5: Calculate mandatory measures using the new requirementsMatrix engine
@@ -712,7 +749,192 @@ export function MeasuresStep({ form }: MeasuresStepProps) {
         </CardContent>
       </Card>
 
-      {/* Exempt Warning */}
+      {/* Ramps Card - Seção 6.3.2 */}
+      <Card className="border-purple-500/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ArrowUpDown className="h-5 w-5 text-purple-600" />
+            Rampas (Seção 6.3.2 - NTCB 13/2020)
+          </CardTitle>
+          <CardDescription>
+            Características das rampas de emergência do projeto
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">RAMPAS CADASTRADAS</p>
+            <Button type="button" variant="outline" size="sm" onClick={handleAddRamp} className="gap-1">
+              <Plus className="h-4 w-4" /> Adicionar Rampa
+            </Button>
+          </div>
+          
+          {ramps.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg">
+              Nenhuma rampa cadastrada. Clique em "Adicionar Rampa" se o projeto possuir rampas de emergência.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {ramps.map((ramp, rampIndex) => (
+                <div key={ramp.id || rampIndex} className="p-4 bg-purple-500/5 rounded-lg border border-purple-500/20 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-purple-700">Rampa {rampIndex + 1}</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-destructive hover:text-destructive"
+                      onClick={() => handleRemoveRamp(rampIndex)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" /> Remover
+                    </Button>
+                  </div>
+                  
+                  {/* Linha 1: Dimensões principais */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Largura (m)</Label>
+                      <Input 
+                        type="number" 
+                        step="0.01" 
+                        className="h-9" 
+                        value={ramp.width || ''}
+                        onChange={e => updateRamp(rampIndex, 'width', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Inclinação (%)</Label>
+                      <Input 
+                        type="number" 
+                        step="0.01" 
+                        className="h-9" 
+                        value={ramp.slope || ''}
+                        onChange={e => updateRamp(rampIndex, 'slope', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Comprimento (m)</Label>
+                      <Input 
+                        type="number" 
+                        step="0.01" 
+                        className="h-9" 
+                        value={ramp.length || ''}
+                        onChange={e => updateRamp(rampIndex, 'length', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Altura por Lance (m)</Label>
+                      <Input 
+                        type="number" 
+                        step="0.01" 
+                        className="h-9" 
+                        value={ramp.heightPerRun || ''}
+                        onChange={e => updateRamp(rampIndex, 'heightPerRun', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Linha 2: Guarda-corpo e Corrimão */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Altura Guarda-corpo (m)</Label>
+                      <Input 
+                        type="number" 
+                        step="0.01" 
+                        className="h-9" 
+                        value={ramp.guardRailHeight || ''}
+                        onChange={e => updateRamp(rampIndex, 'guardRailHeight', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Altura Corrimão (m)</Label>
+                      <Input 
+                        type="number" 
+                        step="0.01" 
+                        className="h-9" 
+                        value={ramp.handrailHeight || ''}
+                        onChange={e => updateRamp(rampIndex, 'handrailHeight', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Diâmetro Corrimão (mm)</Label>
+                      <Input 
+                        type="number" 
+                        className="h-9" 
+                        value={ramp.handrailDiameter || ''}
+                        onChange={e => updateRamp(rampIndex, 'handrailDiameter', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">TRRF Estrutura (min)</Label>
+                      <Input 
+                        type="number" 
+                        className="h-9" 
+                        value={ramp.trrfStructure || ''}
+                        onChange={e => updateRamp(rampIndex, 'trrfStructure', parseInt(e.target.value) || 0)}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Linha 3: Patamares */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Qtd. Patamares</Label>
+                      <Input 
+                        type="number" 
+                        className="h-9" 
+                        value={ramp.landingQuantity || ''}
+                        onChange={e => updateRamp(rampIndex, 'landingQuantity', parseInt(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Comprimento Patamar (m)</Label>
+                      <Input 
+                        type="number" 
+                        step="0.01" 
+                        className="h-9" 
+                        value={ramp.landingLength || ''}
+                        onChange={e => updateRamp(rampIndex, 'landingLength', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Largura Patamar (m)</Label>
+                      <Input 
+                        type="number" 
+                        step="0.01" 
+                        className="h-9" 
+                        value={ramp.landingWidth || ''}
+                        onChange={e => updateRamp(rampIndex, 'landingWidth', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Linha 4: Materiais */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">TRRF Paredes (descrição)</Label>
+                      <Input 
+                        className="h-9" 
+                        placeholder="Ex: Alvenaria 14cm"
+                        value={ramp.trrfWall || ''}
+                        onChange={e => updateRamp(rampIndex, 'trrfWall', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Material das Portas</Label>
+                      <Input 
+                        className="h-9" 
+                        placeholder="Ex: PCF 60 minutos"
+                        value={ramp.doorMaterial || ''}
+                        onChange={e => updateRamp(rampIndex, 'doorMaterial', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
       {exemptMeasures.length > 0 && (
         <Alert variant="destructive" className="border-amber-500/50 bg-amber-500/5 text-amber-700">
           <AlertTriangle className="h-5 w-5" />
