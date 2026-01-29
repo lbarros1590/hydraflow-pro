@@ -466,9 +466,53 @@ function createBuildingCharacteristicsTable(formData: ProjectFormData): (Paragra
 
 // Section 5.1.3 - Safety Measures
 function createSafetyMeasuresTable(formData: ProjectFormData): (Paragraph | Table)[] {
-  // Usa medidas globais do projeto
-  const selectedMeasures = formData.mandatoryMeasures || formData.voluntaryMeasures || [];
+  // Mapeia IDs do wizard para IDs do relatório
+  const measureIdMap: Record<string, string> = {
+    'extintores': 'extintores',
+    'sinalizacao': 'sinalizacao',
+    'iluminacao': 'iluminacao_emergencia',
+    'alarme': 'alarme',
+    'hidrantes': 'hidrantes',
+    'spk': 'sprinklers',
+    'chuveiros': 'sprinklers',
+    'deteccao': 'deteccao',
+    'brigada': 'brigada',
+    'saidas': 'saidas_emergencia',
+    'controleAcesso': 'controle_acabamento',
+    'ppcip': 'plano_intervencao',
+  };
+  
+  // Combina medidas obrigatórias, isentas e voluntárias para determinar quais estão ativas
+  const mandatoryMeasures = formData.mandatoryMeasures || [];
+  const exemptMeasures = formData.exemptMeasures || [];
+  const voluntaryMeasures = formData.voluntaryMeasures || [];
+  
+  // Medidas selecionadas = (obrigatórias OU voluntárias) - isentas
+  const selectedMeasureIds = [
+    ...mandatoryMeasures.filter(m => !exemptMeasures.includes(m)),
+    ...voluntaryMeasures
+  ];
+  
+  // Converte IDs do wizard para IDs do relatório
+  const mappedMeasureIds = selectedMeasureIds.map(id => measureIdMap[id] || id);
+  
+  // Adiciona medidas básicas que sempre estão presentes
+  const basicMeasures = ['acesso_viatura', 'resistencia_fogo', 'saidas_emergencia', 'sinalizacao', 'iluminacao_emergencia', 'extintores'];
+  const finalMeasures = [...new Set([...mappedMeasureIds, ...basicMeasures])];
+  
   const selectedRisks = formData.specialRisks || [];
+  
+  // Mapeia IDs de riscos especiais do wizard para IDs do relatório
+  const riskIdMap: Record<string, string> = {
+    'subsolo': 'outros_especiais',
+    'glp': 'central_glp',
+    'vasosPressao': 'vasos_pressao',
+    'inflamaveis': 'liquidos_inflamaveis',
+    'caldeira': 'outros_especiais',
+    'heliponto': 'heliponto',
+  };
+  
+  const mappedRiskIds = selectedRisks.map(id => riskIdMap[id] || id);
 
   // Split measures into two columns
   const col1Measures = SAFETY_MEASURES.slice(0, Math.ceil(SAFETY_MEASURES.length / 2));
@@ -482,9 +526,9 @@ function createSafetyMeasuresTable(formData: ProjectFormData): (Paragraph | Tabl
     const m2 = col2Measures[i];
     measureRows.push(new TableRow({
       children: [
-        cell(selectedMeasures.includes(m1?.id || '') ? 'x' : ''),
+        cell(finalMeasures.includes(m1?.id || '') ? 'x' : ''),
         cell(m1?.label || '', { align: AlignmentType.LEFT }),
-        cell(selectedMeasures.includes(m2?.id || '') ? 'x' : ''),
+        cell(finalMeasures.includes(m2?.id || '') ? 'x' : ''),
         cell(m2?.label || '', { align: AlignmentType.LEFT })
       ]
     }));
@@ -501,9 +545,9 @@ function createSafetyMeasuresTable(formData: ProjectFormData): (Paragraph | Tabl
     const r2 = col2Risks[i];
     riskRows.push(new TableRow({
       children: [
-        cell(selectedRisks.includes(r1?.id || '') ? 'x' : ''),
+        cell(mappedRiskIds.includes(r1?.id || '') ? 'x' : ''),
         cell(r1?.label || '', { align: AlignmentType.LEFT }),
-        cell(selectedRisks.includes(r2?.id || '') ? 'x' : ''),
+        cell(mappedRiskIds.includes(r2?.id || '') ? 'x' : ''),
         cell(r2?.label || '', { align: AlignmentType.LEFT })
       ]
     }));
@@ -527,7 +571,13 @@ function createSafetyMeasuresTable(formData: ProjectFormData): (Paragraph | Tabl
 function createFireResistanceSection(formData: ProjectFormData): (Paragraph | Table)[] {
   const building = formData.buildings?.[0];
   const fr = building?.fireResistance;
-  const hClass = getHeightClass(building?.totalHeight || 0);
+  const hClass = getHeightClass(building?.totalHeight || formData.totalHeight || 0);
+  
+  // Get division from mainClassification or first sector
+  let division = formData.mainClassification?.division || '';
+  if (!division && building?.floors?.[0]?.sectors?.[0]?.occupancyCode) {
+    division = building.floors[0].sectors[0].occupancyCode;
+  }
 
   return [
     new Paragraph({
@@ -545,40 +595,44 @@ function createFireResistanceSection(formData: ProjectFormData): (Paragraph | Ta
           headerCell('Divisão'), 
           headerCell('Altura'), 
           headerCell('Tipo de Parede'), 
-          headerCell('Espessura Total da Parede')
+          headerCell('Espessura Total da Parede'),
+          headerCell('TRRF Exigido'),
+          headerCell('TRRF Existente')
         ]}),
         new TableRow({ children: [
-          cell(building?.floors?.[0]?.sectors?.[0]?.occupancyCode || '-'),
+          cell(division || '-'),
           cell(hClass.heightRange),
-          cell(fr?.wallType || 'Meio tijolo com revestimento'),
-          cell(fr?.wallThickness || '15 cm')
+          cell(fr?.wallType || 'Meio Tijolo com revestimento'),
+          cell(fr?.wallThickness || '15'),
+          cell(`${fr?.trrfRequired || 30} min`),
+          cell(`${fr?.trrfExisting?.trrf || 120} min`)
         ]})
       ]
     }),
-    new Paragraph({ text: '', spacing: { after: 100 } }),
+    new Paragraph({ text: '', spacing: { after: 50 } }),
     new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
       rows: [
-        new TableRow({ children: [headerCell('Exigido'), headerCell('', { colspan: 2 }), headerCell('Existente')] }),
+        new TableRow({ children: [headerCell('Critério'), headerCell('Exigido'), headerCell('Existente')] }),
         new TableRow({ children: [
-          cell(`${fr?.trrfRequired || 30} min`),
           cell('Integridade'),
+          cell(`${fr?.trrfRequired || 30} min`),
           cell(`${fr?.trrfExisting?.integrity || 120} min`)
         ]}),
         new TableRow({ children: [
-          cell(''),
           cell('Estanqueidade'),
+          cell(`${fr?.trrfRequired || 30} min`),
           cell(`${fr?.trrfExisting?.tightness || 120} min`)
         ]}),
         new TableRow({ children: [
-          cell(''),
           cell('Isolação térmica'),
-          cell(`${fr?.trrfExisting?.thermalInsulation || 120} min`)
+          cell(`${fr?.trrfRequired || 30} min`),
+          cell(`${fr?.trrfExisting?.thermalInsulation || 12} min`)
         ]}),
         new TableRow({ children: [
-          cell(''),
-          cell('TRRF'),
-          cell(`${fr?.trrfExisting?.trrf || 120} min`)
+          cell('TRRF', { bold: true }),
+          cell(`${fr?.trrfRequired || 30} min`, { bold: true }),
+          cell(`${fr?.trrfExisting?.trrf || 120} min`, { bold: true })
         ]})
       ]
     })
@@ -865,51 +919,43 @@ function createExcludedAreasTable(formData: ProjectFormData, type: 'measures' | 
     ? 'EXCLUSÃO DE ÁREAS PARA ENQUADRAMENTO DE MEDIDAS DE SEGURANÇA'
     : 'EXCLUSÃO DE ÁREAS PARA SISTEMAS HIDRÁULICOS';
 
-  const defaultItems = type === 'measures' ? [
-    'Telheiros, com laterais abertas, destinados à proteção de utensílios, caixas d\'água, tanques e outras instalações desde que não tenham área superior a 4,00 m² (quatro metros quadrado);',
-    'Platibandas',
-    'Beirais de telhados até um metro de projeção',
-    'Escadas',
-    'Dutos de ventilação de saídas de emergência',
-    'Passagens cobertas, com largura máxima de 3 metros, com laterais abertas, destinadas apenas à circulação de pessoas ou mercadorias',
-    'Coberturas incombustíveis e sombrites destinadas exclusivamente a estacionamento de veículos localizadas no térreo, sem fechamentos laterais',
-    'Painéis solares'
-  ] : [
-    'Coberturas exclusivas de bombas de Combustível',
-    'Reservatórios de água, piscinas, banheiros, vestiários',
-    'Coberturas das praças de pedágio'
-  ];
-
   const rows: TableRow[] = [
-    new TableRow({ children: [headerCell(tableTitle, { colspan: 2 })] }),
-    new TableRow({ children: [headerCell('Denominação'), headerCell('Área (m²)')] }),
+    new TableRow({ children: [headerCell(tableTitle, { colspan: 3 })] }),
+    new TableRow({ children: [
+      headerCell('Denominação'),
+      headerCell('Referência Normativa'),
+      headerCell('Área (m²)')
+    ] }),
   ];
 
-  // Add default items with areas from formData
+  // Add items from formData with new structure (description, reference, area)
   let totalExcluded = 0;
-  defaultItems.forEach(item => {
-    const areaItem = excludedAreas.find((e: any) => e.denomination?.includes(item.substring(0, 20)));
-    const area = areaItem?.area || 0;
-    totalExcluded += area;
+  excludedAreas.forEach((item: any) => {
+    const description = item.description || item.denomination || '';
+    const reference = item.reference || '';
+    const area = item.area || 0;
     
-    if (area > 0) {
+    if (description) {
+      totalExcluded += area;
       rows.push(new TableRow({ children: [
-        cell(item, { align: AlignmentType.LEFT }),
-        cell(area > 0 ? area.toFixed(2) : '')
+        cell(description, { align: AlignmentType.LEFT }),
+        cell(reference),
+        cell(area > 0 ? area.toFixed(2) : '-')
       ]}));
     }
   });
 
-  // Add total row
+  // Add total row if any areas
   if (totalExcluded > 0) {
     rows.push(new TableRow({ children: [
       cell('Área total excluída', { align: AlignmentType.LEFT, bold: true }),
+      cell(''),
       cell(totalExcluded.toFixed(2), { bold: true })
     ]}));
   }
 
-  // If no areas to show, return empty
-  if (totalExcluded === 0) {
+  // If no items to show, return empty
+  if (rows.length <= 2) {
     return [];
   }
 
